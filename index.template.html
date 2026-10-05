@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>星屑物语 · 樱之境 — Three.js 动漫风开放世界</title>
+<style>
+:root{--pink:#ff8fb8;--pink2:#ffc1d9;--ink:#3b2a5a;--glass:rgba(255,255,255,.72);--cyan:#6fd8ff;--gold:#ffd36b}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"Noto Sans SC","Microsoft YaHei","PingFang SC",system-ui,sans-serif;color:var(--ink)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hidden{display:none!important}
+.panel{background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:2px solid #fff;border-radius:18px;box-shadow:0 6px 24px rgba(90,60,150,.25),inset 0 0 0 2px rgba(255,143,184,.35)}
+
+/* loading + title */
+#loading,#title,#ending,#pause{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center}
+#loading{background:linear-gradient(160deg,#ffd9ec 0%,#c9e8ff 55%,#d9d4ff 100%)}
+#loading h1,#title h1{margin:0;font-size:clamp(34px,7vw,74px);letter-spacing:.12em;font-weight:900;background:linear-gradient(90deg,#ff6fa8,#ffb86f 45%,#6fd8ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #fff) drop-shadow(0 8px 18px rgba(120,80,200,.35))}
+#loading p,#title p.sub{margin:.4em 0 1.2em;letter-spacing:.35em;font-size:14px;color:#7a5aa8;font-weight:700}
+#lbar{width:min(360px,70vw);height:14px;border-radius:9px;background:#fff;border:2px solid #fff;box-shadow:0 2px 12px rgba(120,80,200,.3);overflow:hidden}
+#lfill{height:100%;width:0;background:linear-gradient(90deg,#ff8fb8,#ffd36b,#6fd8ff);transition:width .25s}
+#ltxt{margin-top:12px;font-size:13px;color:#7a5aa8}
+#title{background:radial-gradient(ellipse at 50% 70%,rgba(255,255,255,0) 0%,rgba(80,40,140,.25) 100%);pointer-events:auto}
+#title .box{padding:22px 34px 26px;max-width:min(680px,92vw)}
+#startBtn,.btn{pointer-events:auto;cursor:pointer;border:none;font:inherit;font-weight:900;font-size:20px;letter-spacing:.2em;color:#fff;padding:14px 46px;border-radius:40px;background:linear-gradient(135deg,#ff7fb0,#ffb06f);box-shadow:0 6px 0 #d4557f,0 12px 26px rgba(255,100,160,.45);transition:transform .12s}
+#startBtn:hover,.btn:hover{transform:translateY(-2px) scale(1.03)}
+#startBtn:active,.btn:active{transform:translateY(4px);box-shadow:0 2px 0 #d4557f}
+#keys{margin-top:22px;display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px 12px;text-align:left;font-size:13px;padding:14px 18px;color:#4a3a6a}
+#keys b{background:#fff;border:2px solid var(--pink2);border-radius:7px;padding:1px 8px;font-size:12px;color:#d4557f;white-space:nowrap}
+
+/* HUD */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+#stats{position:absolute;left:18px;top:16px;width:270px;padding:10px 14px 10px 14px}
+.row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px;font-weight:800}
+.row i{font-style:normal;width:22px;text-align:center;font-size:15px}
+.bar{flex:1;height:13px;border-radius:8px;background:rgba(80,50,120,.22);overflow:hidden;border:1.5px solid #fff;position:relative}
+.bar>div{height:100%;width:100%;border-radius:8px;transition:width .15s}
+#hpfill{background:linear-gradient(90deg,#ff5f8f,#ff9ab8)}
+#stfill{background:linear-gradient(90deg,#5fd08a,#b5f06a)}
+#enfill{background:linear-gradient(90deg,#ffb830,#fff06a)}
+#hpnum{width:62px;text-align:right}
+#shardrow{display:flex;align-items:center;gap:8px;font-weight:900;font-size:15px;margin-top:4px}
+#shardrow span{color:#e0a020}
+#mapwrap{position:absolute;right:18px;top:16px;width:214px}
+#mapbox{width:200px;height:200px;margin:0 auto;border-radius:50%;overflow:hidden;border:4px solid #fff;box-shadow:0 6px 22px rgba(90,60,150,.35),0 0 0 3px var(--pink);background:#9bd}
+#minimap{width:100%;height:100%;display:block}
+#maptxt{text-align:center;margin-top:8px;font-weight:900;font-size:13px;padding:4px 10px;display:inline-block;position:relative;left:50%;transform:translateX(-50%);white-space:nowrap}
+#quest{position:absolute;right:18px;top:290px;width:260px;padding:12px 16px;font-size:13px}
+#quest h3{margin:0 0 4px;font-size:14px;color:#d4557f;letter-spacing:.08em}
+#quest .qt{font-weight:900;font-size:15px}
+#quest .qd{margin-top:4px;line-height:1.5;color:#5a4a7a}
+#quest .qp{margin-top:6px;height:8px;border-radius:5px;background:rgba(80,50,120,.18);overflow:hidden}
+#quest .qp>div{height:100%;background:linear-gradient(90deg,#ff8fb8,#ffd36b);width:0;transition:width .3s}
+#prompt{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);padding:9px 22px;font-weight:900;font-size:16px;white-space:nowrap}
+#prompt b{background:var(--pink);color:#fff;border-radius:8px;padding:2px 10px;margin-right:8px}
+#dialog{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:min(760px,92vw);padding:18px 24px 20px;pointer-events:auto;cursor:pointer}
+#dname{position:absolute;left:22px;top:-18px;background:linear-gradient(135deg,#ff7fb0,#ffb06f);color:#fff;font-weight:900;padding:4px 22px;border-radius:14px;border:2px solid #fff;letter-spacing:.1em;box-shadow:0 4px 12px rgba(255,100,160,.4)}
+#dtext{font-size:18px;line-height:1.7;min-height:62px;font-weight:600}
+#dnext{position:absolute;right:20px;bottom:8px;color:var(--pink);font-size:14px;animation:bob 1s infinite}
+@keyframes bob{50%{transform:translateY(4px)}}
+#toasts{position:absolute;left:50%;top:92px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px}
+.toast{padding:8px 22px;font-weight:900;font-size:15px;animation:toast 3.2s forwards;white-space:nowrap}
+.toast.gold{background:linear-gradient(135deg,#fff3c4,#ffe08a)}
+.toast.big{font-size:20px;padding:12px 32px;background:linear-gradient(135deg,#ffe3f0,#fff3c4)}
+@keyframes toast{0%{opacity:0;transform:translateY(-14px) scale(.9)}8%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+#banner{position:absolute;left:50%;top:22%;transform:translateX(-50%);text-align:center;opacity:0;transition:opacity .8s;text-shadow:0 2px 0 #fff,0 0 22px rgba(255,255,255,.9)}
+#banner.show{opacity:1}
+#banner .n{font-size:clamp(30px,5vw,54px);font-weight:900;letter-spacing:.3em;color:#c23b78;padding-left:.3em}
+#banner .e{font-size:14px;letter-spacing:.5em;color:#7a5aa8;font-weight:800;padding-left:.5em}
+#banner .l{width:260px;height:3px;margin:8px auto;background:linear-gradient(90deg,transparent,#ff8fb8,transparent)}
+#boss{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:min(520px,52vw);padding:8px 16px;text-align:center;font-weight:900;font-size:14px}
+#boss .bar{height:16px;margin-top:5px}
+#bossfill{background:linear-gradient(90deg,#9a5cff,#ff7fd0)}
+#help{position:absolute;left:18px;bottom:16px;padding:8px 14px;font-size:12px;line-height:1.75;color:#4a3a6a}
+#help b{color:#d4557f}
+#dmg{position:absolute;inset:0;overflow:hidden}
+.dn{position:absolute;font-weight:900;font-size:26px;color:#fff;-webkit-text-stroke:2px #d4557f;paint-order:stroke fill;text-shadow:0 3px 0 #d4557f;animation:dn .9s forwards;transform:translate(-50%,-50%)}
+.dn.crit{font-size:36px;color:#fff3a0;-webkit-text-stroke:2.5px #e07a20}
+.dn.me{color:#ffdfe8;-webkit-text-stroke:2px #c2284f;text-shadow:0 3px 0 #c2284f}
+.dn.heal{color:#d8ffd0;-webkit-text-stroke:2px #2e9a4f;text-shadow:0 3px 0 #2e9a4f}
+@keyframes dn{0%{opacity:0;margin-top:10px;scale:.5}15%{opacity:1;scale:1.25}30%{scale:1}100%{opacity:0;margin-top:-46px}}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:9;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(255,40,90,.55) 100%);transition:opacity .25s}
+#under{position:fixed;inset:0;pointer-events:none;z-index:8;opacity:0;background:linear-gradient(rgba(60,160,230,.35),rgba(30,90,200,.5));transition:opacity .2s}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:9;opacity:0;background:#fff}
+#fade{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;background:#fff;transition:opacity .8s}
+#pause{background:rgba(70,40,120,.35);backdrop-filter:blur(4px);cursor:pointer}
+#pause h2{font-size:40px;letter-spacing:.3em;color:#fff;margin:0 0 8px;text-shadow:0 3px 12px rgba(120,60,180,.6)}
+#pause p{color:#fff;font-weight:700;letter-spacing:.1em}
+#ending{background:radial-gradient(ellipse at center,rgba(255,255,255,.1),rgba(255,180,220,.55));pointer-events:none;opacity:0;transition:opacity 1.5s}
+#ending.show{opacity:1;pointer-events:auto}
+#ending h1{font-size:clamp(30px,6vw,60px);margin:0;letter-spacing:.2em;color:#fff;text-shadow:0 4px 0 #e0588e,0 0 30px #ffb8d8}
+#ending p{color:#fff;font-weight:800;letter-spacing:.15em;line-height:2;text-shadow:0 2px 10px rgba(180,60,120,.7)}
+
+/* multiplayer */
+#mpBox{margin-top:16px;display:flex;flex-direction:column;gap:10px;align-items:center}
+#mpBox .mprow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.mpin{pointer-events:auto;border:2px solid var(--pink2);border-radius:12px;padding:9px 12px;font:inherit;font-weight:700;font-size:14px;color:var(--ink);background:rgba(255,255,255,.85);outline:none}
+.mpin:focus{border-color:var(--pink)}
+.mpbtn{pointer-events:auto;cursor:pointer;border:none;font:inherit;font-weight:900;font-size:15px;letter-spacing:.1em;color:#fff;background:linear-gradient(135deg,#7fb0ff,#b06fff);border-radius:24px;padding:9px 26px;box-shadow:0 4px 0 #5a76c0}
+.mpbtn:active{transform:translateY(2px);box-shadow:0 2px 0 #5a76c0}
+#mpHint{font-size:12px;color:#7a5aa8;font-weight:700}
+#netbar{position:absolute;left:18px;top:126px;padding:5px 12px;display:flex;align-items:center;gap:10px;font-weight:900;font-size:12px}
+#leaveBtn{pointer-events:auto;cursor:pointer;border:none;background:none;font:inherit;font-weight:900;color:#c2284f;padding:0 4px}
+#chatwrap{position:absolute;left:18px;bottom:96px;width:min(340px,60vw)}
+#chat{max-height:170px;overflow:hidden;padding:8px 12px;font-size:12px;font-weight:700;line-height:1.7;color:#4a3a6a;word-break:break-all}
+#chRow{display:flex;gap:6px;margin-top:6px;pointer-events:auto}
+#chIn{flex:1;min-width:0;border:2px solid var(--pink2);border-radius:10px;padding:6px 10px;font:inherit;font-weight:700;font-size:13px;color:var(--ink);background:rgba(255,255,255,.9);outline:none}
+#chToggle,#chSend{pointer-events:auto;cursor:pointer;border:none;background:var(--pink);color:#fff;font:inherit;font-weight:900;font-size:12px;border-radius:10px;padding:6px 12px}
+
+/* touch */
+#touch{position:fixed;inset:0;z-index:12;pointer-events:none}
+#stick{position:absolute;left:28px;bottom:36px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.3);border:3px solid rgba(255,255,255,.7);pointer-events:auto;touch-action:none}
+#knob{position:absolute;left:45px;top:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,143,184,.85);border:3px solid #fff}
+.tb{position:absolute;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.55);border:3px solid #fff;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;color:#d4557f}
+@media (max-width:760px){#quest{top:250px;width:200px}#mapbox{width:140px;height:140px}#mapwrap{width:150px}#stats{width:200px}#help{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="loading">
+  <h1>星屑物语</h1>
+  <p>STARDUST CHRONICLE · 樱之境</p>
+  <div id="lbar"><div id="lfill"></div></div>
+  <div id="ltxt">正在召唤世界…</div>
+</div>
+
+<div id="title" class="hidden">
+  <div class="box">
+    <h1>星屑物语</h1>
+    <p class="sub">STARDUST CHRONICLE · 樱之境</p>
+    <button id="startBtn">开始冒险</button>
+    <div id="keys" class="panel">
+      <b>W A S D</b><span>移动</span><b>鼠标 / 右键拖动</b><span>转动视角</span>
+      <b>Shift</b><span>冲刺</span><b>空格</b><span>跳跃 · 二段跳 · 空中按住滑翔</span>
+      <b>左键 / J</b><span>三连斩</span><b>Q</b><span>星屑爆发（能量≥60）</span>
+      <b>E</b><span>交谈 / 互动</span><b>H · M · B</b><span>帮助 · 静音 · 泛光</span>
+    </div>
+    <div id="mpBox">
+      <div class="mprow">
+        <input id="nameIn" class="mpin" maxlength="16" placeholder="你的名字" autocomplete="off">
+        <input id="srvIn" class="mpin" style="width:min(260px,60vw)" placeholder="服务器地址（选填）" autocomplete="off">
+        <button id="joinBtn" class="mpbtn">连线同行</button>
+      </div>
+      <div id="mpHint">留空即连本机/同站服务；远程玩法填 <b>ws://公网IP:8770</b>　·　服务端启动：<b>bash deploy/start.sh</b></div>
+    </div>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="stats" class="panel">
+    <div class="row"><i>❤</i><div class="bar"><div id="hpfill"></div></div><span id="hpnum">100/100</span></div>
+    <div class="row"><i>⚡</i><div class="bar"><div id="stfill"></div></div></div>
+    <div class="row"><i>✦</i><div class="bar"><div id="enfill"></div></div><span id="ennum">0%</span></div>
+    <div id="shardrow">🌟 星屑碎片 <span id="shards">0 / 60</span></div>
+  </div>
+  <div id="mapwrap">
+    <div id="mapbox"><canvas id="minimap" width="400" height="400"></canvas></div>
+    <div id="maptxt" class="panel"><span id="region">始源之村</span> · <span id="clock">09:00</span></div>
+  </div>
+  <div id="quest" class="panel"><h3>✿ 当前任务</h3><div class="qt" id="qt"></div><div class="qd" id="qd"></div><div class="qp"><div id="qpf"></div></div></div>
+  <div id="boss" class="panel hidden"><div>史莱姆王</div><div class="bar"><div id="bossfill"></div></div></div>
+  <div id="banner"><div class="n" id="bn"></div><div class="l"></div><div class="e" id="be"></div></div>
+  <div id="toasts"></div>
+  <div id="prompt" class="panel hidden"><b>E</b><span id="ptxt"></span></div>
+  <div id="dialog" class="panel hidden"><div id="dname"></div><div id="dtext"></div><div id="dnext">▼</div></div>
+  <div id="help" class="panel"><b>WASD</b> 移动　<b>Shift</b> 冲刺　<b>空格</b> 跳/滑翔　<b>左键</b> 攻击　<b>Q</b> 爆发　<b>E</b> 互动<br><b>H</b> 隐藏帮助　<b>M</b> 静音　<b>B</b> 泛光　<b>[ ]</b> 调节时间</div>
+  <div id="dmg"></div>
+  <div id="netbar" class="panel hidden"><span id="nstat">未连线</span><span id="nonline"></span><button id="leaveBtn">✕</button></div>
+  <div id="chatwrap">
+    <div id="chat" class="panel hidden"></div>
+    <div id="chRow" class="panel"><button id="chToggle">💬</button><input id="chatIn" placeholder="和旅伴说点什么…" maxlength="120" autocomplete="off"><button id="chSend">发送</button></div>
+  </div>
+</div>
+<div id="vig"></div><div id="under"></div><div id="flash"></div><div id="fade"></div>
+
+<div id="touch" class="hidden">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tb" id="tbAtk" style="right:34px;bottom:70px;width:84px;height:84px;font-size:16px">攻击</div>
+  <div class="tb" id="tbJump" style="right:132px;bottom:38px">跳跃</div>
+  <div class="tb" id="tbSpr" style="right:138px;bottom:118px;width:54px;height:54px">冲刺</div>
+  <div class="tb" id="tbSp" style="right:30px;bottom:170px;width:54px;height:54px">爆发</div>
+  <div class="tb" id="tbE" style="right:100px;bottom:190px;width:54px;height:54px">互动</div>
+</div>
+
+<div id="pause" class="hidden"><h2>暂 停</h2><p>点击画面继续冒险</p></div>
+<div id="ending"><h1>✿ 愿望实现了 ✿</h1><p id="endtxt"></p><br><button class="btn" id="endBtn">继续探索</button></div>
+
+<script>__BUNDLE__</script>
+</body>
+</html>

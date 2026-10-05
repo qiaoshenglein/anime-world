@@ -1,0 +1,27 @@
+services:
+  anime-world:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: anime-world-server:latest
+    container_name: anime-world
+    restart: unless-stopped
+    ports:
+      - "8770:8770"
+    environment:
+      PORT: "8770"
+      HOST: "0.0.0.0"
+      MAX_PLAYERS: "24"
+      LANES: "4"
+      # 若前置反代（Nginx/Caddy）取真实 IP，则打开：
+      # TRUST_PROXY: "1"
+      # 直接挂 TLS（证书需放到 deploy/certs 并映射进容器）：
+      # TLS_CERT: /app/deploy/certs/fullchain.pem
+      # TLS_KEY: /app/deploy/certs/privkey.pem
+    volumes:
+      - ./certs:/app/deploy/certs:ro
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:8770/healthz');if(!(await r.json()).ok)process.exit(1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

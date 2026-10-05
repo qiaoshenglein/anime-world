@@ -1,0 +1,32 @@
+# 前置反代示例：域名 + 自动 HTTPS（页面与 /ws 同域，浏览器无需改地址）
+# 用后请把 TRUST_PROXY=1 写入 deploy/.env，服务端才能按 X-Forwarded-For 统计真实 IP。
+
+# ---- Caddy（最省事，自动签发续期证书）----
+# /etc/caddy/Caddyfile
+game.example.com {
+    reverse_proxy 127.0.0.1:8770
+}
+
+# ---- Nginx ----
+# server {
+#     listen 443 ssl http2;
+#     server_name game.example.com;
+#     ssl_certificate     /etc/letsencrypt/live/game.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/game.example.com/privkey.pem;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:8770;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Forwarded-For $remote_addr;
+#     }
+#     location /ws {
+#         proxy_pass http://127.0.0.1:8770/ws;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#         proxy_set_header X-Forwarded-For $remote_addr;
+#         proxy_read_timeout 3600s;   # WebSocket 长连接，勿设太短
+#         proxy_send_timeout 3600s;
+#     }
+# }
+# server { listen 80; server_name game.example.com; return 301 https://$host$request_uri; }

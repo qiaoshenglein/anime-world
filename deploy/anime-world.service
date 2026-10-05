@@ -1,0 +1,24 @@
+[Unit]
+Description=星屑物语 · 多人联机服务端 (anime-world)
+Documentation=file:__DIR__/docs/deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__BUN__ server/index.js
+Restart=always
+RestartSec=2
+Environment=PORT=8770
+Environment=HOST=0.0.0.0
+EnvironmentFile=-__DIR__/deploy/.env
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

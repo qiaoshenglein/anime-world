@@ -1,0 +1,13 @@
+{
+  "name": "anime-world",
+  "type": "module",
+  "scripts": {
+    "build": "bun run build.js",
+    "start": "bun server/index.js",
+    "serve": "bun server/index.js",
+    "test": "bun test/run-all.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  }
+}
