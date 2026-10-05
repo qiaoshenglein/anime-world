@@ -12,10 +12,11 @@ import { Particles, Petals, Fireflies, pointUniforms } from './particles.js';
 import { AudioSys } from './audio.js';
 import { FX } from './fx.js';
 import { Slime } from './enemies.js';
-import { net } from './net.js';
+import { net, EMOTES, iconSprite } from './net.js';
 
 const $ = (id) => document.getElementById(id);
-const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+// ?touch=1 可强制启用触摸布局，便于在桌面端验证移动端控件
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || new URLSearchParams(location.search).has('touch');
 
 // ------------------------------------------------------------------ renderer
 const canvas = $('c');
@@ -47,11 +48,13 @@ function resize() {
   camera.updateProjectionMatrix();
   pointUniforms.uScale.value = (h * PR) / (2 * Math.tan((camera.fov * Math.PI) / 360));
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); layoutTouchHud(); });
 resize();
 
 // ------------------------------------------------------------------ state
-const G = { state: 'loading', t: 0, hitstop: 0, shakeAmt: 0, paused: false, locked: false, noLock: false, cine: null, timeScale: 1, bloomOn: true };
+const G = { state: 'loading', t: 0, hitstop: 0, shakeAmt: 0, locked: false, noLock: false, cursor: false, cine: null, timeScale: 1, bloomOn: true };
+// 光标模式：指针自由（可点 UI/聊天），靠屏幕边缘缓慢转向；转向速率在此平滑，避免突兀
+const steer = { yaw: 0, pitch: 0, curYaw: 0, curPitch: 0, overUi: false };
 const audio = new AudioSys();
 const P = {
   pos: new THREE.Vector3(0, 0, 16), vel: new THREE.Vector3(), vy: 0, yaw: Math.PI,
@@ -330,9 +333,9 @@ function updateDrops(dt) {
 }
 
 // ------------------------------------------------------------------ combat
-function hurtPlayer(dmg, from) {
+function hurtPlayer(dmg, from, by) {
   if (P.invuln > 0 || P.dead || P.cast) return;
-  dmg = Math.round(dmg);
+  dmg = Math.max(1, Math.round(dmg) || 1); // 网络来源的数值必须兜底，否则 NaN 会污染血量
   P.hp -= dmg;
   P.invuln = 1.0; P.hurtT = 0.3;
   const dx = P.pos.x - from.x, dz = P.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
@@ -344,12 +347,12 @@ function hurtPlayer(dmg, from) {
   dmgNumber(playerHead(), '-' + dmg, 'me');
   $('vig').style.opacity = 1; setTimeout(() => ($('vig').style.opacity = 0), 220);
   shake(0.35); G.hitstop = 0.06;
-  if (P.hp <= 0) killPlayer();
+  if (P.hp <= 0) killPlayer(by);
 }
-function killPlayer() {
+function killPlayer(by) {
   P.hp = 0; P.dead = true; P.deadT = 0; P.atk = null; P.glide = false;
   $('fade').style.transition = 'opacity 1.2s'; $('fade').style.opacity = 1;
-  toast('你倒下了……', '');
+  toast(by ? '在与 ' + by + ' 的切磋中倒下了……对方并没有见血，只是扶你起来' : '你倒下了……', '');
 }
 function respawnPlayer() {
   P.dead = false; P.hp = P.maxHp; P.pos.set(0, world.heightAt(0, 16), 16); P.vel.set(0, 0, 0); P.vy = 0; P.invuln = 2;
@@ -406,6 +409,19 @@ function updateAttack(dt) {
           P.energy = Math.min(100, P.energy + (died ? 10 : 6));
           any = true;
         }
+      }
+    }
+    if (pvpOn && net.state === 'online') {
+      // 切磋：仅对同样开启切磋的旅伴生效，伤害由服务端校验后回传，双方各自扣血
+      for (const r of net.remotes.values()) {
+        if (!r.pvp) continue;
+        const rx = r.gx - P.pos.x, rz = r.gz - P.pos.z, d = Math.hypot(rx, rz);
+        if (d > 2.9 || Math.abs(r.gy - P.pos.y) > 3) continue;
+        const dot = (rx * fx_ + rz * fz_) / (d || 1);
+        if (dot <= 0.2 && d >= 1.3) continue;
+        const crit = Math.random() < 0.15;
+        net.hit(r.id, Math.max(1, (1 + (a.idx === 2 ? 1 : 0) + P.dmgBonus) * (crit ? 2 : 1)));
+        any = true;
       }
     }
     if (any) {
@@ -724,6 +740,15 @@ $('endBtn').addEventListener('click', () => {
 
 // ------------------------------------------------------------------ camera
 function updateCamera(dt) {
+  if (G.cursor) {
+    // 边缘转向速率渐进（起停都平滑），指针停在界面控件上时不转
+    const kk = 1 - Math.exp(-dt * 8);
+    const ty = steer.overUi ? 0 : steer.yaw, tp = steer.overUi ? 0 : steer.pitch;
+    steer.curYaw = lerp(steer.curYaw, ty, kk);
+    steer.curPitch = lerp(steer.curPitch, tp, kk);
+    if (Math.abs(steer.curYaw) > 0.004) cam.yaw -= steer.curYaw * dt;
+    if (Math.abs(steer.curPitch) > 0.004) cam.pitch = clamp(cam.pitch + steer.curPitch * dt, -0.3, 1.3);
+  }
   const head = P.swim ? 0.6 : 1.55;
   const tgt = tmpV.set(P.pos.x, P.pos.y + head + (P.cast ? 0.5 : 0), P.pos.z);
   const k = 1 - Math.exp(-dt * 22);
@@ -840,6 +865,8 @@ function drawMinimap() {
     for (let i = 0; i < 10; i++) { const r = i % 2 ? 6 : 13, a = (i / 10) * 6.283 - 1.57; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
     c.closePath(); c.fill(); c.stroke(); c.restore();
   }
+  // 玩家标点：同伴的呼叫在地图上同样可见
+  drawPingsOnMap(c, S, m, sc, inR);
   // player arrow
   const fdx = Math.sin(P.yaw), fdz = Math.cos(P.yaw);
   const ax = fdx * b.rx + fdz * b.rz, ay = -(fdx * b.fx + fdz * b.fz);
@@ -847,20 +874,44 @@ function drawMinimap() {
   c.fillStyle = '#fff'; c.strokeStyle = '#d4557f'; c.lineWidth = 4;
   c.beginPath(); c.moveTo(0, -15); c.lineTo(10, 11); c.lineTo(0, 5); c.lineTo(-10, 11); c.closePath(); c.stroke(); c.fill(); c.restore();
 }
+// 点小地图 = 在那个位置发出呼叫标点。指针锁定时事件不会落到界面元素上，故只在光标模式/触屏下生效
+function initMapPing() {
+  const cv = $('minimap');
+  cv.addEventListener('click', (e) => {
+    if (G.state !== 'play' || G.locked || G.cine || D.open) return;
+    const r = cv.getBoundingClientRect();
+    const S = 400, R = 110, m = S / (2 * R);
+    const sx = ((e.clientX - r.left) / r.width) * S, sy = ((e.clientY - r.top) / r.height) * S;
+    if (Math.hypot(sx - S / 2, sy - S / 2) > S / 2 - 8) return;
+    const b = camBasis();
+    const det = b.rx * b.fz - b.rz * b.fx;
+    const u = (sx - S / 2) / m, v = (S / 2 - sy) / m;
+    const X = (u * b.fz - v * b.rz) / det, Z = (b.rx * v - u * b.fx) / det;
+    if (Math.hypot(X, Z) > 100) { toast('标点太远了，点在离自己近一些的地方', ''); return; }
+    sendPing(P.pos.x + X, P.pos.z + Z);
+  });
+}
 
 // ------------------------------------------------------------------ input
 function requestLock() {
-  if (isTouch || G.noLock) return;
-  try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { G.noLock = true; }); } catch (e) { G.noLock = true; }
+  if (isTouch || G.noLock || G.cursor) return;
+  try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { G.noLock = true; setCursor(true); }); } catch (e) { G.noLock = true; setCursor(true); }
+}
+// 光标模式开关：不再暂停游戏，失去锁定时直接切换为可点击的光标模式
+function setCursor(on, quiet) {
+  if (isTouch) return;
+  G.cursor = !!on;
+  canvas.style.cursor = G.cursor ? 'default' : 'none';
+  if (G.cursor) { if (document.pointerLockElement) document.exitPointerLock(); steer.yaw = steer.pitch = steer.curYaw = steer.curPitch = 0; }
+  else requestLock();
+  syncModeBtn();
+  if (!quiet) toast(G.cursor ? '光标模式：可自由点击界面 · 移到屏幕边缘转视角 · Tab 返回锁定' : '已锁定鼠标：WASD 移动，鼠标转视角', '');
 }
 document.addEventListener('pointerlockchange', () => {
-  const was = G.locked;
   G.locked = document.pointerLockElement === canvas;
-  if (was && !G.locked && G.state === 'play' && !G.cine) { G.paused = true; $('pause').classList.remove('hidden'); }
-  if (G.locked) { G.paused = false; $('pause').classList.add('hidden'); }
+  if (!G.locked && G.state === 'play' && !G.cine && !G.cursor) setCursor(true, true); // 无暂停：解锁即光标模式，世界继续运行
 });
 document.addEventListener('pointerlockerror', () => { G.noLock = true; });
-$('pause').addEventListener('click', () => { G.paused = false; $('pause').classList.add('hidden'); requestLock(); });
 
 window.addEventListener('keydown', (e) => {
   const tag = e.target && e.target.tagName;
@@ -875,7 +926,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH') $('help').classList.toggle('hidden');
   if (e.code === 'KeyM') { audio.setMuted(!audio.muted); toast(audio.muted ? '已静音' : '声音已开启'); }
   if (e.code === 'KeyB') { G.bloomOn = !G.bloomOn; bloom.enabled = G.bloomOn; toast('泛光：' + (G.bloomOn ? '开' : '关')); }
-  if (e.code === 'KeyP') { G.paused = !G.paused; $('pause').classList.toggle('hidden', !G.paused); if (document.pointerLockElement) document.exitPointerLock(); }
+  if (e.code === 'Tab') setCursor(!G.cursor);
+  if (e.code === 'KeyG') sendPing(P.pos.x, P.pos.z); // 在自己的位置做标点呼叫同伴
+  const emap = { Digit1: 'wave', Digit2: 'heart', Digit3: 'up', Digit4: 'spark' };
+  if (emap[e.code]) doEmote(emap[e.code]);
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -889,7 +943,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (D.open) { advanceDialog(); return; }
   if (e.button === 2) { drag = { x: e.clientX, y: e.clientY, right: true }; return; }
   if (e.button === 0) {
-    if (!G.locked && !G.noLock && !isTouch) { requestLock(); drag = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
+    if (!G.locked && !G.cursor && !G.noLock && !isTouch) { requestLock(); drag = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
     if (G.locked) pressed.Attack = true;
     else drag = { x: e.clientX, y: e.clientY, moved: 0 };
   }
@@ -907,10 +961,52 @@ window.addEventListener('mousemove', (e) => {
     if (!drag.right) drag.moved += Math.abs(dx) + Math.abs(dy);
     cam.yaw -= dx * 0.005; cam.pitch = clamp(cam.pitch + dy * 0.005, -0.3, 1.3);
   }
+  // 光标模式的边缘转向：越靠近边缘转得越快，中央有大片死区；指针停在界面控件上不转向
+  steer.overUi = e.target !== canvas;
+  if (G.cursor && !drag) {
+    const ZX = 0.1, ZY = 0.09; // 边缘触发带（占屏幕比例）
+    const nx = e.clientX / innerWidth, ny = e.clientY / innerHeight;
+    const dzx = nx < ZX ? 1 - nx / ZX : nx > 1 - ZX ? 1 - (1 - nx) / ZX : 0;
+    const dzy = ny < ZY ? 1 - ny / ZY : ny > 1 - ZY ? 1 - (1 - ny) / ZY : 0;
+    steer.yaw = (nx < 0.5 ? -1 : 1) * (dzx > 0 ? dzx : 0) * 1.35; // 符号与拖动一致：左边缘=向左转
+    steer.pitch = (ny < 0.5 ? -1 : 1) * (dzy > 0 ? dzy : 0) * 0.55;
+    if (dzx <= 0) steer.yaw = 0;
+    if (dzy <= 0) steer.pitch = 0;
+  } else if (!drag) { steer.yaw = steer.pitch = 0; }
 });
 window.addEventListener('wheel', (e) => { cam.dist = clamp(cam.dist + Math.sign(e.deltaY) * 0.8, 3, 14); }, { passive: true });
 
 // touch controls
+// 网页全屏：Android/桌面走 Fullscreen API，iOS Safari 不支持元素全屏，给出可操作提示
+function fsElem() { return document.fullscreenElement || document.webkitFullscreenElement || document.webkitCurrentFullScreenElement || null; }
+function initFullscreen() {
+  const el = $('fsBtn');
+  if (!el) return;
+  const label = () => { el.textContent = fsElem() ? '退出' : '全屏'; };
+  document.addEventListener('fullscreenchange', label);
+  document.addEventListener('webkitfullscreenchange', label);
+  const hint = () => {
+    toast('此浏览器不支持网页全屏', 'gold');
+    setTimeout(() => toast('iPhone：分享 → 添加到主屏幕，再从图标进入即全屏', ''), 900);
+  };
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    audio.start();
+    try {
+      if (fsElem()) {
+        const ex = document.exitFullscreen || document.webkitExitFullscreen;
+        ex ? ex.call(document) : hint();
+      } else {
+        const root = document.documentElement;
+        const req = root.requestFullscreen || root.webkitRequestFullscreen || root.webkitRequestFullScreen;
+        if (!req) return hint();
+        Promise.resolve(req.call(root, { navigationUI: 'hide' })).then(label).catch(hint);
+      }
+    } catch { hint(); }
+    setTimeout(resize, 260); // 尺寸变化在部分内核上不会派发 resize
+  });
+  label();
+}
 if (isTouch) {
   $('touch').classList.remove('hidden');
   const stick = $('stick'), knob = $('knob');
@@ -938,6 +1034,7 @@ if (isTouch) {
   btn('tbSpr', () => { touch.sprint = true; }, () => { touch.sprint = false; });
   btn('tbSp', () => { pressed.KeyQ = true; });
   btn('tbE', () => { interact(); });
+  initFullscreen();
   let cid = null, lx = 0, ly = 0;
   canvas.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { cid = e.pointerId; lx = e.clientX; ly = e.clientY; if (D.open) advanceDialog(); } });
   canvas.addEventListener('pointermove', (e) => {
@@ -1012,6 +1109,12 @@ function update(dt) {
   updateDrops(dt);
   updateNPCs(dt);
   updateWorldFX(dt);
+  updatePings(dt);
+  if (myBubble) {
+    myBubbleT -= dt;
+    myBubble.position.set(P.pos.x, P.pos.y + 2.75 + Math.sin(G.t * 2.6) * 0.06, P.pos.z);
+    if (myBubbleT <= 0) { scene.remove(myBubble); myBubble.material.map.dispose(); myBubble.material.dispose(); myBubble = null; }
+  }
   updateHUD(dt);
   drawMinimap();
   for (const k in pressed) pressed[k] = false;
@@ -1043,7 +1146,7 @@ function frame(now) {
   if (G.state === 'loading') return;
   if (G.hitstop > 0) { G.hitstop -= dt; dt *= 0.06; }
   if (G.state === 'title') updateTitle(dt);
-  else if (!G.paused) update(dt);
+  else update(dt);
   composer.render();
 }
 
@@ -1099,6 +1202,93 @@ async function boot() {
   composer.render();
 }
 
+// ------------------------------------------------------------------ 玩家互动：表情 / 标点呼叫 / 切磋
+const EMOTE_TXT = { wave: '你招了招手', heart: '你比了个心', up: '你竖起了大拇指', spark: '你撒出一把星屑' };
+const EMOTE_PEER = { wave: '向你招招手', heart: '向你比了个心', up: '为你竖起大拇指', spark: '撒出一把星屑' };
+let myBubble = null, myBubbleT = 0;
+let pvpOn = false;
+const pings = []; // {x,z,t,mesh,mine,name}
+
+function showMyBubble(sprite, ttl) {
+  if (myBubble) { scene.remove(myBubble); myBubble.material.map.dispose(); myBubble.material.dispose(); }
+  myBubble = sprite; myBubbleT = ttl;
+  sprite.position.set(P.pos.x, P.pos.y + 2.75, P.pos.z);
+  scene.add(sprite);
+}
+function doEmote(kind) {
+  if (G.cine || P.dead) return;
+  if (!EMOTES[kind]) return;
+  net.emote(kind);
+  showMyBubble(iconSprite(EMOTES[kind]), 1.8);
+  particles.burst(P.pos.x, P.pos.y + 1.5, P.pos.z, 10, 1.8, 0xffd8ea, 0.5, 0.7, 0.4);
+  audio.play('blip');
+  toast(EMOTE_TXT[kind], '');
+}
+function togglePvp() {
+  pvpOn = !pvpOn;
+  net.pvp(pvpOn);
+  syncModeBtn();
+  toast(pvpOn ? '切磋开启：只有同样开启的旅伴才会互相造成伤害' : '切磋关闭：你的攻击对旅伴无效', 'gold');
+}
+function sendPing(x, z) {
+  if (G.state !== 'play') return;
+  const mine = localStorage.getItem('aw.net.name') || '你';
+  addPing(x, z, mine, true);
+  if (!net.ping(x, z)) toast('未连线，这个标点只有自己可见', '');
+  else toast('已向同伴发出呼叫', 'gold');
+}
+function addPing(x, z, name, mine) {
+  const y = world ? world.groundAt(x, z, 1000) + 2.2 : 2;
+  const mesh = makeMarker(mine ? '★' : '!', mine ? '#e0a020' : '#ff6fa8'); // ★/! 都是老字形的安全字符，避免部分系统渲染成豆腐块
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  pings.push({ x, z, y, t: 0, mesh, mine, name });
+  while (pings.length > 8) { const old = pings.shift(); scene.remove(old.mesh); old.mesh.material.map.dispose(); old.mesh.material.dispose(); }
+  if (!mine) {
+    const d = Math.round(Math.hypot(x - P.pos.x, z - P.pos.z));
+    toast(name + ' 在约 ' + d + ' 米外呼叫', 'gold');
+    audio.play('blip');
+    particles.burst(x, y - 1.4, z, 14, 3, 0xff9ac8, 0.4, 0.8, 0.3);
+  }
+}
+function updatePings(dt) {
+  for (let i = pings.length - 1; i >= 0; i--) {
+    const g = pings[i];
+    g.t += dt;
+    g.mesh.position.y = g.y + Math.sin(g.t * 2.6) * 0.18;
+    const k = g.t > 20 ? 1 - (g.t - 20) / 5 : 1;
+    g.mesh.material.opacity = Math.max(0, k);
+    const s = 0.7 + Math.sin(g.t * 4) * 0.06;
+    g.mesh.scale.set(s, s, 1);
+    if (g.t > 25) {
+      scene.remove(g.mesh); g.mesh.material.map.dispose(); g.mesh.material.dispose();
+      pings.splice(i, 1);
+    }
+  }
+}
+function drawPingsOnMap(mm, S, m, sc, inR) {
+  for (const g of pings) {
+    const [x, y] = sc(g.x, g.z);
+    if (!inR(x, y)) continue;
+    const a = g.t > 20 ? Math.max(0, 1 - (g.t - 20) / 5) : 1;
+    mm.globalAlpha = a;
+    mm.strokeStyle = '#fff'; mm.lineWidth = 3;
+    mm.beginPath(); mm.arc(x, y, 9 + Math.sin(g.t * 4) * 2, 0, 7); mm.stroke();
+    mm.fillStyle = g.mine ? '#ffd36b' : '#ff6fa8';
+    mm.beginPath(); mm.arc(x, y, 4.5, 0, 7); mm.fill();
+    mm.globalAlpha = 1;
+  }
+}
+// 光标模式 / 切磋 / 表情按钮的文字状态
+function syncModeBtn() {
+  const mb = $('modeBtn'), pb = $('pvBtn');
+  if (!mb || !pb) return;
+  mb.textContent = G.cursor ? '锁定' : '光标';
+  mb.classList.toggle('on', G.cursor);
+  pb.textContent = pvpOn ? '切磋中' : '切磋';
+  pb.classList.toggle('on', pvpOn);
+}
+
 // ------------------------------------------------------------------ 多人联机 UI
 const NET_TXT = { off: '未连线', connecting: '连接中…', online: '联机中', lost: '重连中…' };
 const DEFAULT_SRV = net.url;
@@ -1114,10 +1304,10 @@ let chatHidden = true;
 let MP_HINT_DEFAULT = '';
 // 联机状态需在标题页与游戏内都可见：曾在标题页无任何反馈，导致“点了没反应”的误判
 function mpSync() {
-  const playing = G.state === 'play' || G.state === 'cine';
+  const playing = G.state === 'play';
   const active = !!net.profile && net.state !== 'off';
   $('netbar').classList.toggle('hidden', !(playing && active));
-  if (playing) { $('mpBox').classList.toggle('hidden', active); return; }
+  if (playing) { $('mpBox').classList.toggle('hidden', active); layoutTouchHud(); return; }
   const btn = $('joinBtn'), hint = $('mpHint');
   if (active) {
     btn.textContent = net.state === 'online' ? '已联机 ✓' : '连线中…';
@@ -1125,6 +1315,18 @@ function mpSync() {
       ? '<b>已连线 · 在线 ' + netCount + ' 人</b>　点「开始冒险」进入世界即可与旅伴同行'
       : '正在连接 <b>' + net.url.replace(/^wss?:\/\//, '') + '</b>…　久候未连上请检查端口与安全组';
   } else { btn.textContent = '连线同行'; hint.innerHTML = MP_HINT_DEFAULT; }
+}
+// 触摸端 HUD 左列排布：按真实尺寸依次下排，避免与状态面板/摇杆重叠（须在 HUD 可见后调用）
+// netbar 里的胶囊按钮会折行，高度不固定，所以表情行与聊天面板都以实测底部为准
+function layoutTouchHud() {
+  if (G.state !== 'play') return;
+  const nb = $('netbar'), er = $('emoteRow');
+  if (!nb || !er) return;
+  if (isTouch) nb.style.cssText += `;top:${Math.round($('stats').getBoundingClientRect().bottom) + 8}px;bottom:auto`;
+  if (nb.classList.contains('hidden')) return;
+  const nbB = Math.round(nb.getBoundingClientRect().bottom);
+  er.style.cssText += `;top:${nbB + 6}px`;
+  if (isTouch) $('chatwrap').style.cssText += `;top:${nbB + 8}px;bottom:auto;width:min(300px,52vw)`;
 }
 function netInit() {
   if (net.api) return;
@@ -1144,6 +1346,19 @@ function netInit() {
     onPeerJoin: (name) => toast(name + ' 来到了樱之境', ''),
     onPeerLeave: (name) => toast(name + ' 离开了', ''),
     onNetErr: (code) => toast(code === 'full' ? '分线已满，正在重试…' : code === 'rate' ? '发送太快，被暂时限制' : '联机异常：' + code, 'gold'),
+    onPeerEmote: (kind, name, r) => {
+      if (r && Math.hypot(r.gx - P.pos.x, r.gz - P.pos.z) > 18) return; // 远处的动作不打扰
+      toast(name + ' ' + (EMOTE_PEER[kind] || '做了个动作'), '');
+    },
+    onPeerPvp: (on, name) => {
+      if (G.state === 'play') toast(name + (on ? ' 开启了切磋，你的攻击对他有效' : ' 关闭了切磋'), 'gold');
+    },
+    onPlayerHit: (h) => hurtPlayer(h.dmg, h.from, h.by),
+    onPeerHit: (v, dmg) => {
+      particles.burst(v.gx, v.gy + 1.4, v.gz, dmg > 0 ? 9 : 14, 2.4, dmg > 0 ? 0xffe8a0 : 0xff9ac8, 0.4, 0.8, 0.4);
+      if (dmg > 0) dmgNumber(new THREE.Vector3(v.gx, v.gy + 1.9, v.gz), dmg, dmg >= 4 ? 'crit' : '');
+    },
+    onPing: (g) => { if (G.state === 'play') addPing(g.x, g.z, g.name, false); },
   });
   const url = new URLSearchParams(location.search).get('srv');
   const nameIn = $('nameIn'), srvIn = $('srvIn');
@@ -1160,6 +1375,20 @@ function netInit() {
     mpSync();
   });
   $('leaveBtn').addEventListener('click', () => { net.disconnect(); mpSync(); });
+  // 互动胶囊栏：动作面板 / 切磋开关 / 就地呼叫 / 光标模式
+  const emRow = $('emoteRow');
+  $('emBtn').addEventListener('click', () => {
+    audio.start();
+    emRow.classList.toggle('hidden');
+    if (!emRow.classList.contains('hidden')) layoutTouchHud();
+  });
+  for (const b of emRow.querySelectorAll('[data-em]')) b.addEventListener('click', () => doEmote(b.dataset.em));
+  $('pvBtn').addEventListener('click', () => { audio.start(); togglePvp(); });
+  $('pgBtn').addEventListener('click', () => { audio.start(); sendPing(P.pos.x, P.pos.z); });
+  $('modeBtn').addEventListener('click', () => setCursor(!G.cursor));
+  if (isTouch) $('modeBtn').style.display = 'none'; // 触摸端没有指针锁定，无需光标模式
+  initMapPing();
+  syncModeBtn();
   const chat = $('chat'), inp = $('chatIn');
   const showChat = (v) => { chatHidden = !v; chat.classList.toggle('hidden', chatHidden); if (v) inp.focus(); else inp.blur(); };
   $('chToggle').addEventListener('click', () => showChat(chatHidden));
@@ -1173,7 +1402,6 @@ function netInit() {
     if (net.state === 'online') { net.chat(v); pushChat('我：' + v); }
     else pushChat('（未连线，消息未发送）');
   }
-  if (isTouch) $('netbar').style.top = 'auto', $('netbar').style.bottom = '120px';
 }
 function pushChat(line) {
   const box = $('chat');
@@ -1182,7 +1410,8 @@ function pushChat(line) {
   div.textContent = line;
   box.appendChild(div);
   while (box.children.length > 7) box.removeChild(box.firstChild);
-  if (chatHidden && $('hud')) { box.classList.remove('hidden'); clearTimeout(pushChat.t); pushChat.t = setTimeout(() => { if (document.activeElement !== $('chatIn')) box.classList.add('hidden'); }, 6000); }
+  // 桌面端来消息自动展开；触摸端不自动展开，以免面板盖住摇杆，由玩家主动点 💬
+  if (chatHidden && !isTouch && $('hud')) { box.classList.remove('hidden'); clearTimeout(pushChat.t); pushChat.t = setTimeout(() => { if (document.activeElement !== $('chatIn')) box.classList.add('hidden'); }, 6000); }
 }
 
 $('startBtn').addEventListener('click', () => {
@@ -1191,6 +1420,7 @@ $('startBtn').addEventListener('click', () => {
   $('title').classList.add('hidden');
   $('hud').classList.remove('hidden');
   G.state = 'play';
+  layoutTouchHud(); // HUD 此时才可见，左列排布要按真实尺寸计算
   mpSync(); // 须在 state 切到 play 之后，否则联机状态条不会显示
   cam.yaw = 0; cam.pitch = 0.3; cam.dist2 = undefined;
   cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);

@@ -33,7 +33,7 @@ const players = new Map();  // playerId -> Player
 const pending = new Map();  // token -> Player（握手后未入房的槽位，超时回收）
 const live = new Set();     // {ws, ip, helloAt, joined} 在连记录
 const byIp = new Map();     // ip -> count
-const stats = { msgIn: 0, msgOut: 0, drops: 0, rejected: 0, startedAt: Date.now() };
+const stats = { msgIn: 0, msgOut: 0, drops: 0, rejected: 0, pvpRej: 0, startedAt: Date.now() };
 
 const lane = (room, l) => {
   let lm = rooms.get(room);
@@ -85,9 +85,10 @@ class Player {
     this.a = { sp: 0, glid: 0, sw: 0, air: 0, jmp: 0, hit: 0, dead: 0 };
     this.ts = now(); this.lastIn = now(); this.lastChat = 0; this.msgBudget = cfg.msgRate;
     this.bannedUntil = 0;
+    this.pvp = false; this.lastPk = 0; this.lastEm = 0; this.lastPing = 0;
   }
   public() {
-    return { p: this.id, n: this.name, look: this.look, x: +this.x.toFixed(2), y: +this.y.toFixed(2), z: +this.z.toFixed(2), Y: +this.Y.toFixed(3), a: this.a };
+    return { p: this.id, n: this.name, look: this.look, pv: this.pvp ? 1 : 0, x: +this.x.toFixed(2), y: +this.y.toFixed(2), z: +this.z.toFixed(2), Y: +this.Y.toFixed(3), a: this.a };
   }
 }
 
@@ -131,7 +132,7 @@ function handleJoin(p, d) {
   players.set(p.id, p);
   pending.delete(p.tok);
   p.joined = true;
-  send(p.ws, { t: 'welcome', pid: p.id, tok: p.tok, room: p.room, lane: p.laneL, players: rosterOf(target.map) });
+  send(p.ws, { t: 'welcome', pid: p.id, tok: p.tok, room: p.room, lane: p.laneL, pv: p.pvp ? 1 : 0, players: rosterOf(target.map) });
   broadcastAll(target.map, { t: 'roster', players: rosterOf(target.map) });
 }
 
@@ -162,6 +163,55 @@ function removeFromRoom(p) {
     for (const lms of rooms.values()) for (let i = lms.length - 1; i >= 0; i--) if (lms[i] && lms[i].size === 0) lms.splice(i, 1);
     if (lm.size === 0) rooms.delete(p.room);
   }
+}
+
+// ---------------------------------------------------------------- 玩家间交互
+const EMOTES = ['wave', 'heart', 'up', 'spark'];
+
+function handlePvp(p, d) {
+  p.pvp = !!d.v;
+  const lm = rooms.get(p.room)?.[p.laneL];
+  if (lm) broadcastAll(lm, { t: 'pv', p: p.id, v: p.pvp ? 1 : 0 });
+}
+
+function handleEmote(p, d) {
+  const e = EMOTES.includes(d.e) ? d.e : null;
+  if (!e) return;
+  const t = now();
+  if (t - p.lastEm < 1500) return;
+  p.lastEm = t;
+  const lm = rooms.get(p.room)?.[p.laneL];
+  if (lm) broadcastExcept(lm, p.id, { t: 'em', p: p.id, e });
+}
+
+// 切磋：双方都须开启；伤害与距离由服务端裁决，命中结果广播给全线
+// 每条被拒的原因都计入 stats.pvpRej，便于排查「为什么我的攻击没有伤害」
+function rejectPvp() { stats.pvpRej++; }
+function handlePvpHit(p, d) {
+  const t = now();
+  if (!p.pvp) return rejectPvp();
+  if (t - p.lastPk < 300) return;
+  const target = players.get(d.k);
+  if (!target || !target.joined || target === p || target.room !== p.room || target.laneL !== p.laneL) return rejectPvp();
+  if (!target.pvp) return rejectPvp();
+  const dist = Math.hypot(p.x - target.x, p.z - target.z);
+  if (dist > 6) return rejectPvp();
+  const dmg = Math.round(num(d.d, 1, 24));
+  p.lastPk = t;
+  // d 必须显式赋值为结算后的伤害：入站参数同名，写成 `{ d }` 会把整个请求对象转发出去
+  broadcastAll(rooms.get(p.room)[p.laneL], {
+    t: 'pk', a: p.id, s: target.id, d: dmg, x: +p.x.toFixed(1), z: +p.z.toFixed(1),
+  });
+}
+
+function handlePing(p, d) {
+  const x = clamp(d.x, -420, 420), z = clamp(d.z, -420, 420);
+  if (x == null || z == null) return;
+  const t = now();
+  if (t - p.lastPing < 2500) return;
+  p.lastPing = t;
+  const lm = rooms.get(p.room)?.[p.laneL];
+  if (lm) broadcastExcept(lm, p.id, { t: 'pg', p: p.id, n: p.name, x: +x.toFixed(1), z: +z.toFixed(1) });
 }
 
 function handleLeave(p) {
@@ -205,6 +255,10 @@ const handler = {
         case 'join': if (!p.joined) { handleJoin(p, d); st.joined = p.joined; } break;
         case 'st': if (p.joined) handleNv(p, d); break;
         case 'ch': if (p.joined) handleChat(p, d); break;
+        case 'pv': if (p.joined) handlePvp(p, d); break;
+        case 'em': if (p.joined) handleEmote(p, d); break;
+        case 'pk': if (p.joined) handlePvpHit(p, d); break;
+        case 'pg': if (p.joined) handlePing(p, d); break;
         case 'leave': handleLeave(p); st.joined = false; break;
       }
     } catch (e) { console.error('[handler]', d.t, e.message); } // 单帧异常不断连
@@ -233,7 +287,7 @@ setInterval(() => {
 setInterval(() => {
   const up = Math.round((now() - stats.startedAt) / 1000);
   const ips = Object.entries(byIp).filter(([, c]) => c > 0).length;
-  log(`[stats] up=${up}s online=${players.size} conns=${live.size} ips=${ips} in/s=${stats.msgIn} drops=${stats.drops} rej=${stats.rejected}`);
+  log(`[stats] up=${up}s online=${players.size} conns=${live.size} ips=${ips} in/s=${stats.msgIn} drops=${stats.drops} rej=${stats.rejected} pvp_rej=${stats.pvpRej}`);
   stats.msgIn = 0;
 }, 30000).unref?.();
 
@@ -293,7 +347,7 @@ const server = Bun.serve({
       return Response.json({ rooms: list, max: cfg.maxPlayers, lanes: cfg.lanes });
     }
     if (url.pathname === '/metrics') {
-      return Response.json({ online: players.size, conns: live.size, drops: stats.drops, rejected: stats.rejected, msg_out: stats.msgOut, uptime_s: Math.round((now() - stats.startedAt) / 1000) });
+      return Response.json({ online: players.size, conns: live.size, drops: stats.drops, rejected: stats.rejected, pvp_rejected: stats.pvpRej, msg_out: stats.msgOut, uptime_s: Math.round((now() - stats.startedAt) / 1000) });
     }
     const path = url.pathname === '/' ? '/index.html' : url.pathname;
     if (!SAFE_PATH.test(path)) return new Response('bad path', { status: 400, headers: { 'x-content-type-options': 'nosniff' } });

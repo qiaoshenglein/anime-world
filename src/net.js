@@ -27,7 +27,7 @@ function lookFor(pid, look) {
   return { ...LOOKS[hash36(pid) % LOOKS.length] };
 }
 
-function textSprite(text, { bg, fg, font, h }) {
+export function textSprite(text, { bg, fg, font, h }) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   g.font = font;
@@ -49,10 +49,28 @@ function textSprite(text, { bg, fg, font, h }) {
   return s;
 }
 const FONT = '900 30px "Noto Sans SC","Microsoft YaHei",sans-serif';
+export const EMOTES = { wave: '\ud83d\udc4b', heart: '\u2764', up: '\ud83d\udc4d', spark: '\u2728' }; // 均为 Emoji 1.0 字形，兼容性安全
+export function iconSprite(icon) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(255,255,255,.94)';
+  g.beginPath(); g.arc(48, 48, 44, 0, 7); g.fill();
+  g.strokeStyle = '#ff8fb8'; g.lineWidth = 5; g.stroke();
+  g.font = '54px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(icon, 48, 52);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  s.scale.set(0.9, 0.9, 1);
+  s.renderOrder = 17;
+  return s;
+}
 
 class Remote {
-  constructor(api, id, name, x, y, z, yaw, look) {
+  constructor(api, id, name, x, y, z, yaw, look, pv) {
     this.id = id; this.name = name;
+    this.pvp = !!pv;
     this.char = api.buildCharacter({ ...lookFor(id, look), glider: true });
     this.gx = x; this.gy = y; this.gz = z; this.gyaw = yaw;
     this.tx = x; this.ty = y; this.tz = z; this.tyaw = yaw;
@@ -63,13 +81,22 @@ class Remote {
     this.apply(0, api);
   }
   snap(x, y, z, yaw, a) { this.tx = x; this.ty = y; this.tz = z; this.tyaw = yaw; this.a = a || this.a; }
-  say(text) {
+  showBubble(sprite, ttl) {
     if (this.bubble) { this.bubble.parent?.remove?.(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); }
-    const t = text.length > 16 ? text.slice(0, 16) + '…' : text;
-    this.bubble = textSprite(t, { bg: 'rgba(255,255,255,.94)', fg: '#3b2a5a', font: '700 26px "Noto Sans SC",sans-serif', h: 40 });
-    this.bubbleT = 4.5;
+    this.bubble = sprite;
+    this.bubbleT = ttl;
     this.char.root.parent?.add?.(this.bubble);
   }
+  say(text) {
+    const t = text.length > 16 ? text.slice(0, 16) + '…' : text;
+    this.showBubble(textSprite(t, { bg: 'rgba(255,255,255,.94)', fg: '#3b2a5a', font: '700 26px "Noto Sans SC",sans-serif', h: 40 }), 4.5);
+  }
+  emote(kind) {
+    const icon = EMOTES[kind];
+    if (!icon) return;
+    this.showBubble(iconSprite(icon), 1.8);
+  }
+  hurt() { this.char.flash = 1; }
   apply(dt, api) {
     const k = 1 - Math.exp(-dt * 9);
     const ground = api.groundAt(this.tx, this.tz, 1000);
@@ -117,7 +144,7 @@ export class Net {
     this.ws = null; this.state = 'off'; // off | connecting | online | lost
     this.pid = null; this.tok = null;
     this.remotes = new Map();
-    this.sendT = 0; this.retry = 0; this.profile = null;
+    this.sendT = 0; this.retry = 0; this.profile = null; this.myPvp = false;
     this.url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + (location.host || 'localhost:8770') + '/ws';
   }
   init(api) {
@@ -177,8 +204,9 @@ export class Net {
         this._send({ t: 'join', r: 'sakura', l: 0, p: this.profile });
         break;
       case 'welcome': {
+        if (this.myPvp) this._send({ t: 'pv', v: 1 }); // 入房前就开启的切磋开关要补发
         for (const p of d.players || []) if (p.p !== this.pid && !this.remotes.has(p.p))
-          this.remotes.set(p.p, new Remote(api, p.p, p.n, p.x, p.y, p.z, p.Y, p.look));
+          this.remotes.set(p.p, new Remote(api, p.p, p.n, p.x, p.y, p.z, p.Y, p.look, p.pv));
         this._setState('online', this.remotes.size + 1);
         break;
       }
@@ -188,8 +216,8 @@ export class Net {
           if (p.p === this.pid) continue;
           seen.add(p.p);
           let r = this.remotes.get(p.p);
-          if (!r) { r = new Remote(api, p.p, p.n, p.x, p.y, p.z, p.Y, p.look); this.remotes.set(p.p, r); api.onPeerJoin?.(p.n); }
-          else r.snap(p.x, p.y, p.z, p.Y, p.a);
+          if (!r) { r = new Remote(api, p.p, p.n, p.x, p.y, p.z, p.Y, p.look, p.pv); this.remotes.set(p.p, r); api.onPeerJoin?.(p.n); }
+          else { r.snap(p.x, p.y, p.z, p.Y, p.a); r.pvp = !!p.pv; }
         }
         for (const [id, r] of this.remotes) if (!seen.has(id)) { r.dispose(api); this.remotes.delete(id); api.onPeerLeave?.(r.name); }
         this._setState('online', seen.size + (this.pid ? 1 : 0));
@@ -212,6 +240,32 @@ export class Net {
         api.onChat?.(d.n, d.m, d.p === this.pid);
         break;
       }
+      case 'em': {
+        const r = this.remotes.get(d.p);
+        if (r) r.emote(d.e);
+        api.onPeerEmote?.(d.e, r?.name || '', r);
+        break;
+      }
+      case 'pv': {
+        if (d.p === this.pid) break; // 服务端会把开关状态广播回自己，用于换线/重连后对齐
+        const r = this.remotes.get(d.p);
+        if (r) r.pvp = !!d.v;
+        api.onPeerPvp?.(!!d.v, r?.name || '');
+        break;
+      }
+      case 'pk': {
+        if (d.s === this.pid) {
+          const a = this.remotes.get(d.a);
+          api.onPlayerHit?.({ dmg: d.d, from: { x: d.x, z: d.z }, by: a ? a.name : '旅伴' });
+        } else {
+          const v = this.remotes.get(d.s);
+          if (v) { v.hurt(); api.onPeerHit?.(v, d.a === this.pid ? d.d : 0); }
+        }
+        break;
+      }
+      case 'pg':
+        api.onPing?.({ x: d.x, z: d.z, name: d.n, id: d.p });
+        break;
       case 'err':
         api.onNetErr?.(d.code);
         break;
@@ -227,6 +281,16 @@ export class Net {
     const m = text.trim().slice(0, 120);
     if (m && this.state === 'online') this._send({ t: 'ch', m });
   }
+  // 玩家间交互：切磋需双方开启；k 为目标 id（t 已被消息类型占用）
+  pvp(on) { this.myPvp = !!on; if (this.state === 'online') this._send({ t: 'pv', v: on ? 1 : 0 }); }
+  emote(kind) { if (this.state === 'online' && EMOTES[kind]) this._send({ t: 'em', e: kind }); }
+  hit(pid, dmg) { if (this.state === 'online' && this.myPvp && pid) this._send({ t: 'pk', k: pid, d: Math.max(1, Math.round(dmg)) }); }
+  ping(x, z) {
+    if (this.state !== 'online') return false;
+    this._send({ t: 'pg', x: +(+x).toFixed(1), z: +(+z).toFixed(1) });
+    return true;
+  }
+  remote(id) { return this.remotes.get(id) || null; }
   // 主循环驱动：15Hz 上报本地状态 + 远端插值
   tick(P, G, dt) {
     if (!this.api || !this.profile) return;

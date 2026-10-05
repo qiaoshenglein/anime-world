@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>星屑物语 · 樱之境 — Three.js 动漫风开放世界</title>
 <style>
 :root{--pink:#ff8fb8;--pink2:#ffc1d9;--ink:#3b2a5a;--glass:rgba(255,255,255,.72);--cyan:#6fd8ff;--gold:#ffd36b}
@@ -13,7 +13,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 .panel{background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:2px solid #fff;border-radius:18px;box-shadow:0 6px 24px rgba(90,60,150,.25),inset 0 0 0 2px rgba(255,143,184,.35)}
 
 /* loading + title */
-#loading,#title,#ending,#pause{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center}
+#loading,#title,#ending{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center}
 #loading{background:linear-gradient(160deg,#ffd9ec 0%,#c9e8ff 55%,#d9d4ff 100%)}
 #loading h1,#title h1{margin:0;font-size:clamp(34px,7vw,74px);letter-spacing:.12em;font-weight:900;background:linear-gradient(90deg,#ff6fa8,#ffb86f 45%,#6fd8ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 #fff) drop-shadow(0 8px 18px rgba(120,80,200,.35))}
 #loading p,#title p.sub{margin:.4em 0 1.2em;letter-spacing:.35em;font-size:14px;color:#7a5aa8;font-weight:700}
@@ -42,7 +42,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 #shardrow{display:flex;align-items:center;gap:8px;font-weight:900;font-size:15px;margin-top:4px}
 #shardrow span{color:#e0a020}
 #mapwrap{position:absolute;right:18px;top:16px;width:214px}
-#mapbox{width:200px;height:200px;margin:0 auto;border-radius:50%;overflow:hidden;border:4px solid #fff;box-shadow:0 6px 22px rgba(90,60,150,.35),0 0 0 3px var(--pink);background:#9bd}
+#mapbox{width:200px;height:200px;margin:0 auto;border-radius:50%;overflow:hidden;border:4px solid #fff;box-shadow:0 6px 22px rgba(90,60,150,.35),0 0 0 3px var(--pink);background:#9bd;pointer-events:auto;cursor:crosshair}
 #minimap{width:100%;height:100%;display:block}
 #maptxt{text-align:center;margin-top:8px;font-weight:900;font-size:13px;padding:4px 10px;display:inline-block;position:relative;left:50%;transform:translateX(-50%);white-space:nowrap}
 #quest{position:absolute;right:18px;top:290px;width:260px;padding:12px 16px;font-size:13px}
@@ -83,9 +83,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 #under{position:fixed;inset:0;pointer-events:none;z-index:8;opacity:0;background:linear-gradient(rgba(60,160,230,.35),rgba(30,90,200,.5));transition:opacity .2s}
 #flash{position:fixed;inset:0;pointer-events:none;z-index:9;opacity:0;background:#fff}
 #fade{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;background:#fff;transition:opacity .8s}
-#pause{background:rgba(70,40,120,.35);backdrop-filter:blur(4px);cursor:pointer}
-#pause h2{font-size:40px;letter-spacing:.3em;color:#fff;margin:0 0 8px;text-shadow:0 3px 12px rgba(120,60,180,.6)}
-#pause p{color:#fff;font-weight:700;letter-spacing:.1em}
 #ending{background:radial-gradient(ellipse at center,rgba(255,255,255,.1),rgba(255,180,220,.55));pointer-events:none;opacity:0;transition:opacity 1.5s}
 #ending.show{opacity:1;pointer-events:auto}
 #ending h1{font-size:clamp(30px,6vw,60px);margin:0;letter-spacing:.2em;color:#fff;text-shadow:0 4px 0 #e0588e,0 0 30px #ffb8d8}
@@ -99,8 +96,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 .mpbtn{pointer-events:auto;cursor:pointer;border:none;font:inherit;font-weight:900;font-size:15px;letter-spacing:.1em;color:#fff;background:linear-gradient(135deg,#7fb0ff,#b06fff);border-radius:24px;padding:9px 26px;box-shadow:0 4px 0 #5a76c0}
 .mpbtn:active{transform:translateY(2px);box-shadow:0 2px 0 #5a76c0}
 #mpHint{font-size:12px;color:#7a5aa8;font-weight:700}
-#netbar{position:absolute;left:18px;top:126px;padding:5px 12px;display:flex;align-items:center;gap:10px;font-weight:900;font-size:12px}
+#netbar{position:absolute;left:18px;top:126px;padding:5px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:900;font-size:12px;max-width:min(330px,66vw)}
 #leaveBtn{pointer-events:auto;cursor:pointer;border:none;background:none;font:inherit;font-weight:900;color:#c2284f;padding:0 4px}
+.pill{pointer-events:auto;cursor:pointer;border:2px solid #fff;background:rgba(255,255,255,.6);color:#5a4a7a;font:inherit;font-weight:900;font-size:11.5px;border-radius:14px;padding:3px 10px;line-height:1.5}
+.pill.on{background:linear-gradient(135deg,#ff7fb0,#ffb06f);color:#fff;border-color:#fff}
+#emoteRow{position:absolute;left:18px;top:170px;display:flex;gap:8px;pointer-events:auto}
+#emoteRow .pill{font-size:16px;padding:2px 10px}
 #chatwrap{position:absolute;left:18px;bottom:96px;width:min(340px,60vw)}
 #chat{max-height:170px;overflow:hidden;padding:8px 12px;font-size:12px;font-weight:700;line-height:1.7;color:#4a3a6a;word-break:break-all}
 #chRow{display:flex;gap:6px;margin-top:6px;pointer-events:auto}
@@ -112,6 +113,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 #stick{position:absolute;left:28px;bottom:36px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.3);border:3px solid rgba(255,255,255,.7);pointer-events:auto;touch-action:none}
 #knob{position:absolute;left:45px;top:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,143,184,.85);border:3px solid #fff}
 .tb{position:absolute;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.55);border:3px solid #fff;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;color:#d4557f}
+#fsBtn{right:calc(8px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom));width:46px;height:46px;font-size:12px;border-width:2.5px;background:rgba(255,255,255,.42);font-family:inherit;cursor:pointer;padding:0}
 @media (max-width:760px){#quest{top:250px;width:200px}#mapbox{width:140px;height:140px}#mapwrap{width:150px}#stats{width:200px}#help{display:none}}
 </style>
 </head>
@@ -134,7 +136,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
       <b>W A S D</b><span>移动</span><b>鼠标 / 右键拖动</b><span>转动视角</span>
       <b>Shift</b><span>冲刺</span><b>空格</b><span>跳跃 · 二段跳 · 空中按住滑翔</span>
       <b>左键 / J</b><span>三连斩</span><b>Q</b><span>星屑爆发（能量≥60）</span>
-      <b>E</b><span>交谈 / 互动</span><b>H · M · B</b><span>帮助 · 静音 · 泛光</span>
+      <b>E</b><span>交谈 / 互动</span><b>Tab</b><span>光标模式（可点界面 · 边缘转向）</span>
+      <b>1 2 3 4</b><span>招手 / 比心 / 点赞 / 星屑</span><b>G</b><span>呼叫同伴（地图标点）</span>
+      <b>H · M · B</b><span>帮助 · 静音 · 泛光</span>
     </div>
     <div id="mpBox">
       <div class="mprow">
@@ -164,9 +168,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
   <div id="toasts"></div>
   <div id="prompt" class="panel hidden"><b>E</b><span id="ptxt"></span></div>
   <div id="dialog" class="panel hidden"><div id="dname"></div><div id="dtext"></div><div id="dnext">▼</div></div>
-  <div id="help" class="panel"><b>WASD</b> 移动　<b>Shift</b> 冲刺　<b>空格</b> 跳/滑翔　<b>左键</b> 攻击　<b>Q</b> 爆发　<b>E</b> 互动<br><b>H</b> 隐藏帮助　<b>M</b> 静音　<b>B</b> 泛光　<b>[ ]</b> 调节时间</div>
+  <div id="help" class="panel"><b>WASD</b> 移动　<b>Shift</b> 冲刺　<b>空格</b> 跳/滑翔　<b>左键</b> 攻击　<b>Q</b> 爆发　<b>E</b> 互动<br><b>Tab</b> 光标模式　<b>1~4</b> 表情动作　<b>G</b> 呼叫同伴　<b>点地图</b> 标点位<br><b>H</b> 隐藏帮助　<b>M</b> 静音　<b>B</b> 泛光　<b>[ ]</b> 调节时间</div>
   <div id="dmg"></div>
-  <div id="netbar" class="panel hidden"><span id="nstat">未连线</span><span id="nonline"></span><button id="leaveBtn">✕</button></div>
+  <div id="netbar" class="panel hidden"><span id="nstat">未连线</span><span id="nonline"></span><button class="pill" id="emBtn">动作</button><button class="pill" id="pvBtn">切磋</button><button class="pill" id="pgBtn">呼叫</button><button class="pill" id="modeBtn">光标</button><button id="leaveBtn">✕</button></div>
+  <div id="emoteRow" class="hidden"><button class="pill" data-em="wave">👋</button><button class="pill" data-em="heart">❤</button><button class="pill" data-em="up">👍</button><button class="pill" data-em="spark">✨</button></div>
   <div id="chatwrap">
     <div id="chat" class="panel hidden"></div>
     <div id="chRow" class="panel"><button id="chToggle">💬</button><input id="chatIn" placeholder="和旅伴说点什么…" maxlength="120" autocomplete="off"><button id="chSend">发送</button></div>
@@ -181,9 +186,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
   <div class="tb" id="tbSpr" style="right:138px;bottom:118px;width:54px;height:54px">冲刺</div>
   <div class="tb" id="tbSp" style="right:30px;bottom:170px;width:54px;height:54px">爆发</div>
   <div class="tb" id="tbE" style="right:100px;bottom:190px;width:54px;height:54px">互动</div>
+  <button class="tb" id="fsBtn">全屏</button>
 </div>
 
-<div id="pause" class="hidden"><h2>暂 停</h2><p>点击画面继续冒险</p></div>
 <div id="ending"><h1>✿ 愿望实现了 ✿</h1><p id="endtxt"></p><br><button class="btn" id="endBtn">继续探索</button></div>
 
 <script>__BUNDLE__</script>

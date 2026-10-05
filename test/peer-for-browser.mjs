@@ -15,5 +15,6 @@ setInterval(() => {
   ang += 0.3;
   ws.send(JSON.stringify({ t: 'st', ts: Date.now(), x: +(2 + Math.sin(ang) * 3).toFixed(2), y: 2, z: +(12 + Math.cos(ang) * 3).toFixed(2), Y: +ang.toFixed(2), a: { sp: 6 } }));
 }, 66);
+setInterval(() => ws.send(JSON.stringify({ t: 'ch', m: '你好，浏览器里的旅人' })), 4000);
 setTimeout(() => ws.send(JSON.stringify({ t: 'ch', m: '你好，浏览器里的旅人' })), 1500);
 setTimeout(() => process.exit(0), Number(process.env.TIMEOUT || 20000));
