@@ -1019,6 +1019,7 @@ function update(dt) {
 
 function updateTitle(dt) {
   G.t += dt; TIME.value += dt;
+  if (net.api) { net.api.clock = G.t; net.tick(P, G, dt); } // 标题页连线时也要收放状态、让旅伴动起来
   cam.yaw += dt * 0.09;
   cam.pitch = 0.16; cam.dist2 = undefined;
   char.animate(dt, { speed: 0 });
@@ -1091,6 +1092,8 @@ async function boot() {
   $('loading').classList.add('hidden');
   $('title').classList.remove('hidden');
   G.state = 'title';
+  netInit(); // 标题页就要能连线，勿等到开始冒险
+  mpSync();
   if (isTouch) $('keys').classList.add('hidden');
   // warm up shaders
   composer.render();
@@ -1099,6 +1102,7 @@ async function boot() {
 // ------------------------------------------------------------------ 多人联机 UI
 const NET_TXT = { off: '未连线', connecting: '连接中…', online: '联机中', lost: '重连中…' };
 const DEFAULT_SRV = net.url;
+let netCount = 0;
 function srvUrl(v) {
   if (!v) return DEFAULT_SRV;
   let s = /^wss?:\/\//i.test(v) ? v : ((location.protocol === 'https:' ? 'wss://' : 'ws://') + v.replace(/^\w+:\/\//, ''));
@@ -1107,16 +1111,34 @@ function srvUrl(v) {
   return s;
 }
 let chatHidden = true;
+let MP_HINT_DEFAULT = '';
+// 联机状态需在标题页与游戏内都可见：曾在标题页无任何反馈，导致“点了没反应”的误判
+function mpSync() {
+  const playing = G.state === 'play' || G.state === 'cine';
+  const active = !!net.profile && net.state !== 'off';
+  $('netbar').classList.toggle('hidden', !(playing && active));
+  if (playing) { $('mpBox').classList.toggle('hidden', active); return; }
+  const btn = $('joinBtn'), hint = $('mpHint');
+  if (active) {
+    btn.textContent = net.state === 'online' ? '已联机 ✓' : '连线中…';
+    hint.innerHTML = net.state === 'online'
+      ? '<b>已连线 · 在线 ' + netCount + ' 人</b>　点「开始冒险」进入世界即可与旅伴同行'
+      : '正在连接 <b>' + net.url.replace(/^wss?:\/\//, '') + '</b>…　久候未连上请检查端口与安全组';
+  } else { btn.textContent = '连线同行'; hint.innerHTML = MP_HINT_DEFAULT; }
+}
 function netInit() {
   if (net.api) return;
+  MP_HINT_DEFAULT = $('mpHint').innerHTML;
   net.init({
     scene, clock: G.t,
     buildCharacter: buildCharacter,
     groundAt: (x, z, f) => world.groundAt(x, z, f),
     onNetState: (s, count) => {
+      netCount = count || 0;
       $('nstat').textContent = NET_TXT[s] || s;
       $('nstat').style.color = s === 'online' ? '#2e9a5f' : s === 'connecting' || s === 'lost' ? '#c07a20' : '#7a5aa8';
       $('nonline').textContent = s === 'online' ? '在线 ' + count : '';
+      mpSync();
     },
     onChat: (name, m, self) => pushChat((self ? '我' : name) + '：' + m),
     onPeerJoin: (name) => toast(name + ' 来到了樱之境', ''),
@@ -1128,16 +1150,16 @@ function netInit() {
   nameIn.value = localStorage.getItem('aw.net.name') || ('旅人' + Math.floor(Math.random() * 900 + 100));
   srvIn.value = url || localStorage.getItem('aw.net.srv') || '';
   $('joinBtn').addEventListener('click', () => {
+    audio.start();
     const n = nameIn.value.trim().slice(0, 16) || '旅人';
     const s = srvIn.value.trim();
     localStorage.setItem('aw.net.name', n);
     localStorage.setItem('aw.net.srv', s);
     net.url = srvUrl(s);
     net.connect(n, null);
-    $('mpBox').classList.add('hidden');
-    $('netbar').classList.remove('hidden');
+    mpSync();
   });
-  $('leaveBtn').addEventListener('click', () => { net.disconnect(); $('netbar').classList.add('hidden'); });
+  $('leaveBtn').addEventListener('click', () => { net.disconnect(); mpSync(); });
   const chat = $('chat'), inp = $('chatIn');
   const showChat = (v) => { chatHidden = !v; chat.classList.toggle('hidden', chatHidden); if (v) inp.focus(); else inp.blur(); };
   $('chToggle').addEventListener('click', () => showChat(chatHidden));
@@ -1169,6 +1191,7 @@ $('startBtn').addEventListener('click', () => {
   $('title').classList.add('hidden');
   $('hud').classList.remove('hidden');
   G.state = 'play';
+  mpSync(); // 须在 state 切到 play 之后，否则联机状态条不会显示
   cam.yaw = 0; cam.pitch = 0.3; cam.dist2 = undefined;
   cam.target.set(P.pos.x, P.pos.y + 1.5, P.pos.z);
   requestLock();

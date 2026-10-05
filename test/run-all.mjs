@@ -13,7 +13,7 @@ for (let i = 0; i < 50; i++) {
 }
 
 let bad = 0;
-for (const [name, file] of [['协议冒烟', 'net-smoke.mjs'], ['联网层集成', 'net-client.mjs'], ['公网加固', 'hardening.mjs']]) {
+for (const [name, file] of [['协议冒烟', 'net-smoke.mjs'], ['联网层集成', 'net-client.mjs'], ['公网加固', 'hardening.mjs'], ['联机接线', 'ui-wiring.mjs']]) {
   console.log(`\n──────── ${name} (${file}) ────────`);
   const p = Bun.spawn([process.execPath, 'test/' + file], {
     cwd: ROOT, env: { ...process.env, URL: URL_ }, stdout: 'inherit', stderr: 'inherit',
