@@ -389,6 +389,19 @@ export function buildCharacter(opts = {}) {
     if (s.hurt) {
       T.torsoX = -0.35; T.headX = 0.3; T.aLx = -0.8; T.aRx = -0.8; T.aLz = 0.9; T.aRz = -0.9; rate = 40;
     }
+    // 表情动作：鞠躬是慢慢俯下去再起来，起舞是踩着拍子晃。振幅由 gestureAmt(0..1) 推动，
+    // 所以同一条动画既能给自己放（本地计时）也能给同伴放（远端插值），不需要第二套代码。
+    if (s.gesture === 'bow' && !s.swim && !s.glide) {
+      const g = s.gestureAmt || 0;
+      T.torsoX = 0.62 * g; T.headX = -0.3 * g; T.hipsY = 0.77 - 0.06 * g;
+      T.aLx = -0.25 * g; T.aRx = -0.25 * g; T.aLz = 0.22 + 0.1 * g; T.aRz = -0.22 - 0.1 * g;
+      T.eL = 0.2; T.eR = 0.2; T.tLx = -0.12 * g; T.tRx = 0.12 * g; rate = 20;
+    } else if (s.gesture === 'dance' && !s.swim && !s.glide) {
+      const g = s.gestureAmt || 0, d = Math.sin(t * 7.4), e = Math.cos(t * 3.7);
+      T.hipsY = 0.77 + Math.abs(d) * 0.08 * g; T.torsoZ = d * 0.26 * g; T.headZ = -d * 0.18 * g;
+      T.aLx = (-1.5 + d * 0.7) * g; T.aRx = (-1.5 - d * 0.7) * g; T.aLz = 0.55 * g + 0.1; T.aRz = -0.55 * g - 0.1;
+      T.eL = 0.55 + 0.25 * g; T.eR = 0.55 + 0.25 * g; T.tLx = e * 0.3 * g; T.tRx = -e * 0.3 * g; rate = 30;
+    }
     if (s.atk) {
       const u = s.atk.t, idx = s.atk.idx;
       rate = 60;

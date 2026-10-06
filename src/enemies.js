@@ -3,7 +3,7 @@ import { toon, addOutline, canvasTex } from './materials.js';
 import { lerpAngle, clamp, lerp } from './noise.js';
 
 const KINDS = {
-  green: 0x8be36a, blue: 0x6fd6ff, pink: 0xff9ad0, king: 0xb58cff,
+  green: 0x8be36a, blue: 0x6fd6ff, pink: 0xff9ad0, king: 0xb58cff, tide: 0x4fd8c4,
 };
 const faceTex = canvasTex(128, 64, (c) => {
   c.fillStyle = '#2a1a3a';
@@ -23,8 +23,9 @@ export class Slime {
     this.ctx = ctx;
     this.kind = kind;
     this.king = kind === 'king';
-    this.scale = this.king ? 2.6 : 0.9 + Math.random() * 0.25;
-    this.maxHp = this.king ? 26 : 3;
+    this.tide = kind === 'tide';   // 潮水史莱姆：整条分线一起涌上来的那波浪，真正的血量记在服务端的池子里
+    this.scale = this.king ? 2.6 : this.tide ? 1.08 + Math.random() * 0.22 : 0.9 + Math.random() * 0.25;
+    this.maxHp = this.king ? 26 : this.tide ? 5 : 3;
     this.hp = this.maxHp;
     this.radius = 0.8 * this.scale;
     this.dmg = this.king ? 18 : 8;
@@ -119,7 +120,11 @@ export class Slime {
     this.fill.position.x = -0.57 * (1 - this.fill.scale.x);
     const p = this.ctx.particles;
     p.burst(this.pos.x, this.pos.y + 0.7 * this.scale, this.pos.z, 10, 5, KINDS[this.kind], 0.4, 0.5);
-    if (this.hp <= 0) { this.die(); return true; }
+    if (this.hp <= 0) {
+      // 联机时史莱姆王的生死由服务端判定：本地伤害只是表现，不能自己把王打死
+      if (this.ctx.holdKill && this.ctx.holdKill(this)) { this.hp = 1; return false; }
+      this.die(); return true;
+    }
     return false;
   }
 
@@ -144,7 +149,7 @@ export class Slime {
     }
     this.mat.emissiveIntensity = lerp(this.mat.emissiveIntensity, 0.12, 1 - Math.exp(-dt * 8));
     const dx = P.pos.x - this.pos.x, dz = P.pos.z - this.pos.z, dist = Math.hypot(dx, dz);
-    const aggro = this.king ? 26 : 11;
+    const aggro = this.king ? 26 : this.tide ? 17 : 11;
     const engaged = !P.dead && dist < aggro && Math.abs(P.pos.y - this.pos.y) < 14;
     this.barT -= dt;
     if (this.barT <= 0 && !this.king) this.bar.visible = false;

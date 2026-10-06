@@ -1,18 +1,18 @@
 // 公网加固项验证：自带一个专用服务端实例（收紧限额，便于触发边界）
 // 运行: bun test/hardening.mjs
+import { startServer } from './spawn.mjs';
 const R = [];
 const ok = (n, c, extra) => R.push((c ? 'PASS ' : 'FAIL ') + n + (extra ? '  [' + extra + ']' : ''));
 const ROOT = new URL('..', import.meta.url).pathname.replace(/^\/(\w:\/)/, '$1');
-const PORT = 8791;
-const URL_ = `ws://localhost:${PORT}/ws`;
-const HTTP = `http://localhost:${PORT}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const srv = Bun.spawn([process.execPath, 'server/index.js'], {
-  cwd: ROOT,
-  env: { ...process.env, PORT: String(PORT), QUIET: '1', MAX_PER_IP: '2', MAX_CONNS: '8', IDLE_KILL_S: '1', MSG_MAX_BYTES: '512' },
-  stdout: 'ignore', stderr: 'pipe',
-});
+const S = await startServer(ROOT, {
+  MAX_PER_IP: '2', MAX_CONNS: '8', IDLE_KILL_S: '1', MSG_MAX_BYTES: '512', AW_DB: '',
+}, { tag: 'hard', stderr: 'pipe' });
+const PORT = S.port;                       // 空闲端口由系统挑，遗留进程不可能冒充本次被测代码
+const URL_ = S.ws;
+const HTTP = S.base;
+const srv = S.proc;
 
 const health = () => fetch(HTTP + '/healthz').then((r) => r.json());
 const metrics = () => fetch(HTTP + '/metrics').then((r) => r.json());

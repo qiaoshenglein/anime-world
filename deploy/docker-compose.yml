@@ -13,15 +13,20 @@ services:
       HOST: "0.0.0.0"
       MAX_PLAYERS: "24"
       LANES: "4"
+      AW_DB: /data/world.db     # 账号/进度/留言/世界状态；不给就只存内存，重启清零
       # 若前置反代（Nginx/Caddy）取真实 IP，则打开：
       # TRUST_PROXY: "1"
       # 直接挂 TLS（证书需放到 deploy/certs 并映射进容器）：
       # TLS_CERT: /app/deploy/certs/fullchain.pem
       # TLS_KEY: /app/deploy/certs/privkey.pem
     volumes:
+      - world-db:/data          # 记得随容器保留，否则进度只活在一次运行里
       - ./certs:/app/deploy/certs:ro
     healthcheck:
       test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:8770/healthz');if(!(await r.json()).ok)process.exit(1)"]
       interval: 30s
       timeout: 3s
       retries: 3
+
+volumes:
+  world-db:

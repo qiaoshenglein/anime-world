@@ -137,6 +137,90 @@ export class Petals {
   }
 }
 
+// 雨与流星都用「细长光条 + 实例网格」：不读光照、不写深度，软件渲染也扛得住。
+// amount 是 0..1 的强度，天气切换时由调用方慢慢推，所以永远不会有一帧突然变天的突兀感。
+export class Rain {
+  constructor(scene, n = 260) {
+    const g = new THREE.BoxGeometry(0.02, 0.85, 0.02);
+    this.mat = new THREE.MeshBasicMaterial({ color: 0xc8dcff, transparent: true, opacity: 0.5, fog: true, depthWrite: false });
+    this.mesh = new THREE.InstancedMesh(g, this.mat, n);
+    this.mesh.frustumCulled = false;
+    const rng = makeRng(11);
+    this.d = [];
+    for (let i = 0; i < n; i++) this.d.push({ x: (rng() - 0.5) * 44, y: rng() * 26, z: (rng() - 0.5) * 44, sp: 20 + rng() * 12 });
+    this.n = n;
+    this.dum = new THREE.Object3D();
+    scene.add(this.mesh);
+  }
+  update(dt, t, center, wind, amount) {
+    const dm = this.dum;
+    this.mat.opacity = 0.5 * amount;
+    this.mesh.visible = amount > 0.01;
+    if (!this.mesh.visible) return;
+    for (let i = 0; i < this.n; i++) {
+      const p = this.d[i];
+      p.y -= p.sp * dt;
+      p.x += wind.x * 2.4 * dt; p.z += wind.z * 2.4 * dt;
+      if (p.y < -3) p.y += 26;
+      const wx = ((((p.x + 22) % 44) + 44) % 44) - 22, wz = ((((p.z + 22) % 44) + 44) % 44) - 22;
+      p.x = wx; p.z = wz;
+      dm.position.set(center.x + wx, center.y - 3 + p.y, center.z + wz);
+      dm.rotation.set(wind.z * 0.05, 0, -wind.x * 0.05);
+      dm.scale.setScalar(i < this.n * Math.min(1, amount) ? 1 : 0);
+      dm.updateMatrix();
+      this.mesh.setMatrixAt(i, dm.matrix);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+export class Meteors {
+  constructor(scene, n = 9) {
+    const g = new THREE.BoxGeometry(0.5, 0.5, 26);
+    this.mat = new THREE.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: 0.85, fog: false, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.mesh = new THREE.InstancedMesh(g, this.mat, n);
+    this.mesh.frustumCulled = false;
+    this.d = [];
+    for (let i = 0; i < n; i++) this.d.push({ live: false, t: 0, dur: 1, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: 0 });
+    this.n = n;
+    this.next = 0.6;
+    this.dum = new THREE.Object3D();
+    scene.add(this.mesh);
+  }
+  update(dt, t, center, amount) {
+    this.mesh.visible = amount > 0.01;
+    if (!this.mesh.visible) return;
+    this.next -= dt * amount;
+    if (this.next <= 0) {
+      this.next = 0.8 + Math.random() * 2.4;
+      const s = this.d.find((m) => !m.live);
+      if (s) {
+        const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 140;
+        s.live = true; s.t = 0; s.dur = 1.5 + Math.random() * 1.1;
+        s.x = center.x + Math.cos(a) * r; s.z = center.z + Math.sin(a) * r; s.y = 150 + Math.random() * 70;
+        const b = Math.random() * Math.PI * 2;
+        s.dx = Math.cos(b) * (60 + Math.random() * 40); s.dz = Math.sin(b) * 50; s.dy = -110 - Math.random() * 60;
+      }
+    }
+    for (let i = 0; i < this.n; i++) {
+      const m = this.d[i];
+      if (!m.live) { this.dum.scale.setScalar(0); this.dum.position.set(0, -9999, 0); this.dum.updateMatrix(); this.mesh.setMatrixAt(i, this.dum.matrix); continue; }
+      m.t += dt;
+      const u = m.t / m.dur;
+      if (u >= 1) { m.live = false; continue; }
+      const px = m.x + m.dx * m.t, py = m.y + m.dy * m.t, pz = m.z + m.dz * m.t;
+      this.dum.position.set(px, py, pz);
+      this.dum.lookAt(px + m.dx, py + m.dy, pz + m.dz);
+      const fade = Math.sin(Math.PI * Math.min(1, u));
+      this.dum.scale.set(1, 1, 0.4 + fade * 0.9);
+      this.dum.updateMatrix();
+      this.mesh.setMatrixAt(i, this.dum.matrix);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.mat.opacity = 0.85 * amount;
+  }
+}
+
 export class Fireflies extends PointCloud {
   constructor(scene, n = 140) {
     super(scene, n, { additive: true, star: 0.0 });

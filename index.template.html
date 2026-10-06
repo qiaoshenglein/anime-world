@@ -53,6 +53,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 #quest .qp>div{height:100%;background:linear-gradient(90deg,#ff8fb8,#ffd36b);width:0;transition:width .3s}
 #prompt{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);padding:9px 22px;font-weight:900;font-size:16px;white-space:nowrap}
 #prompt b{background:var(--pink);color:#fff;border-radius:8px;padding:2px 10px;margin-right:8px}
+/* 星屑弹蓄力条：贴着屏幕中心偏下，只有一条细光，满了才转成金色——不做缩放、不做抖动，看着不晕 */
+#charge{position:absolute;left:50%;top:58%;transform:translateX(-50%);width:122px;height:9px;border-radius:99px;background:rgba(60,35,95,.28);border:2px solid rgba(255,255,255,.8);overflow:hidden;pointer-events:none;z-index:7}
+#chargefill{height:100%;width:0;background:linear-gradient(90deg,#7fd0ff,#e6f9ff);border-radius:99px}
+#charge.full #chargefill{background:linear-gradient(90deg,#ffd45e,#fff8d2)}
 #dialog{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:min(760px,92vw);padding:18px 24px 20px;pointer-events:auto;cursor:pointer}
 #dname{position:absolute;left:22px;top:-18px;background:linear-gradient(135deg,#ff7fb0,#ffb06f);color:#fff;font-weight:900;padding:4px 22px;border-radius:14px;border:2px solid #fff;letter-spacing:.1em;box-shadow:0 4px 12px rgba(255,100,160,.4)}
 #dtext{font-size:18px;line-height:1.7;min-height:62px;font-weight:600}
@@ -71,6 +75,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 #boss{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:min(520px,52vw);padding:8px 16px;text-align:center;font-weight:900;font-size:14px}
 #boss .bar{height:16px;margin-top:5px}
 #bossfill{background:linear-gradient(90deg,#9a5cff,#ff7fd0)}
+/* 史莱姆潮：这条分线共用的一根池子条，挂在王血条下面，波过了就收走 */
+#tide{position:absolute;left:50%;top:74px;transform:translateX(-50%);width:min(462px,46vw);padding:7px 16px;text-align:center;font-weight:900;font-size:13px}
+#tide .bar{height:13px;margin-top:4px}
+#tidefill{background:linear-gradient(90deg,#39d3bd,#c2f7ee)}
 #help{position:absolute;left:18px;bottom:16px;padding:8px 14px;font-size:12px;line-height:1.75;color:#4a3a6a}
 #help b{color:#d4557f}
 #dmg{position:absolute;inset:0;overflow:hidden}
@@ -102,10 +110,74 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
 .pill.on{background:linear-gradient(135deg,#ff7fb0,#ffb06f);color:#fff;border-color:#fff}
 #emoteRow{position:absolute;left:18px;top:170px;display:flex;gap:8px;pointer-events:auto}
 #emoteRow .pill{font-size:16px;padding:2px 10px}
+#pals{position:absolute;left:18px;top:212px;width:min(252px,54vw);padding:6px 8px 7px;font-size:11.5px;font-weight:700;color:#4a3a6a;pointer-events:auto}
+#pals h4{margin:0 0 3px;font-size:10.5px;letter-spacing:.1em;color:#7a5aa8;font-weight:900}
+#pals .pal{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:10px;cursor:pointer;line-height:1.4}
+#pals .pal:hover{background:rgba(255,143,184,.24)}
+#pals .pal.on{background:linear-gradient(135deg,#ff7fb0,#ffb06f);color:#fff;font-weight:900}
+#pals .pal i{font-style:normal;font-size:14px;font-weight:900;width:15px;text-align:center}
+#pals .pal s{width:7px;height:7px;border-radius:50%;background:#2e9a5f;text-decoration:none;flex:none}
+#pals .pal s.hit{background:#c2284f}
+#pals .pal em{font-style:normal;margin-left:auto;font-weight:900;opacity:.8}
+#pals .pal .pa{font-style:normal;text-decoration:none;font-size:11px;opacity:.55;cursor:pointer;padding:0 2px;flex:none}
+#pals .pal .pa:hover{opacity:1}
+#pals .pal .pa.on{opacity:1;color:#c2284f}
+#pals .pal.mute{opacity:.62}
+#acct{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(330px,86vw);padding:14px 16px 12px;font-size:12.5px;font-weight:700;line-height:1.75;color:#4a3a6a;pointer-events:auto;z-index:15}
+#acct h4{margin:0 0 6px;font-size:12px;letter-spacing:.14em;color:#7a5aa8;font-weight:900}
+#acctClose{position:absolute;right:8px;top:7px;border:none;background:none;cursor:pointer;font:inherit;font-weight:900;color:#a488c8;font-size:13px;padding:2px 6px}
+#acctLine,#acctStats{white-space:pre-line}
+#acctStats{color:#7a5aa8;font-size:11.5px;margin-top:2px}
+#acctRow{display:flex;gap:6px;margin-top:9px}
+#acctName,#acctPass{flex:1;min-width:0;border:2px solid var(--pink2);border-radius:10px;padding:6px 9px;font:inherit;font-weight:700;font-size:12.5px;color:var(--ink);background:rgba(255,255,255,.92);outline:none}
+#acctPass:disabled{opacity:.5;background:rgba(255,255,255,.5)}
+#acctBtns{display:flex;gap:7px;margin-top:8px}
+#acctHint{margin:8px 0 0;font-size:11px;font-weight:700;color:#7a5aa8;line-height:1.6}
+/* 覆盖式面板：标题页也要能打开（不舒服应当在进世界之前就调好，而不是忍进去） */
+.ovl{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;width:min(390px,92vw);max-height:min(86vh,700px);overflow:auto;padding:16px 18px 14px;font-size:12.5px;font-weight:700;line-height:1.7;color:#4a3a6a;pointer-events:auto}
+.ovl h4{margin:0 0 4px;font-size:13px;letter-spacing:.14em;color:#7a5aa8;font-weight:900}
+.ovl .xclose{position:absolute;right:9px;top:8px;border:none;background:none;cursor:pointer;font:inherit;font-weight:900;color:#a488c8;font-size:14px;padding:2px 6px}
+#setLead,#codexLead{margin:0 0 8px;font-size:11px;color:#7a5aa8;line-height:1.6}
+.srow{display:flex;align-items:center;gap:8px;margin:5px 0}
+.srow label{flex:0 0 96px;font-size:11.5px;font-weight:900;color:#5a4a7a}
+.srow input[type=range]{flex:1;min-width:0;height:22px;accent-color:#ff8fb8;cursor:pointer}
+.srow b{flex:0 0 46px;text-align:right;font-size:11px;font-weight:900;color:#7a5aa8}
+.stog{flex:0 0 auto;cursor:pointer;border:2px solid #fff;background:rgba(200,190,225,.5);color:#5a4a7a;font:inherit;font-weight:900;font-size:11px;border-radius:12px;padding:3px 10px}
+.stog.on{background:linear-gradient(135deg,#ff8fb8,#b06fff);color:#fff;border-color:#fff}
+#setPresets{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+#setPresets .pill{pointer-events:auto}
+#setHint{margin:7px 0 0;font-size:10.5px;color:#8a7aa8;font-weight:700}
+#bookTabs{display:flex;gap:7px;margin:2px 0 9px;flex-wrap:wrap}
+#bookGem{font-size:12px;font-weight:900;color:#b0621a;margin-bottom:7px}
+#bookBody{display:flex;flex-direction:column;gap:7px}
+.gearrow{display:flex;align-items:center;gap:8px;border:2px solid rgba(255,143,184,.5);border-radius:12px;padding:6px 9px;background:rgba(255,255,255,.5)}
+.gearrow b{font-size:12.5px;font-weight:900;color:#5a4a7a;flex:0 0 58px}
+.gearrow .pips{display:flex;gap:3px;flex:0 0 auto}
+.gearrow .pips i{width:9px;height:9px;border-radius:50%;background:rgba(122,90,168,.28)}
+.gearrow .pips i.on{background:linear-gradient(135deg,#ffd45e,#ff9ec8)}
+.gearrow span{flex:1;font-size:10.5px;font-weight:700;color:#7a5aa8;line-height:1.35}
+.gearrow button{pointer-events:auto;cursor:pointer;border:none;font:inherit;font-weight:900;font-size:11px;color:#fff;background:linear-gradient(135deg,#ffb03a,#ff7fa8);border-radius:11px;padding:5px 10px;flex:0 0 auto}
+.gearrow button:disabled{background:rgba(122,90,168,.3);cursor:default}
+.gearrow.max button{background:rgba(46,154,95,.75)}
+.stamps{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.stamps div{font-size:11px;font-weight:900;color:#a495bb;border:2px dashed rgba(160,140,200,.5);border-radius:11px;padding:6px 8px;line-height:1.4}
+.stamps div.got{border-style:solid;border-color:#ff8fb8;color:#5a4a7a;background:rgba(255,143,184,.16)}
+.stamps div em{display:block;font-style:normal;font-weight:700;font-size:9.5px;color:#8a7aa8}
+.wardrobe{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.wardrobe button{pointer-events:auto;cursor:pointer;border:2px solid rgba(160,140,200,.5);background:rgba(255,255,255,.6);color:#5a4a7a;font:inherit;font-weight:900;font-size:11.5px;border-radius:12px;padding:7px 8px;text-align:left;line-height:1.35}
+.wardrobe button.on{border-color:#fff;background:linear-gradient(135deg,#ff8fb8,#b06fff);color:#fff}
+.wardrobe button:disabled{opacity:.45;cursor:default}
+.wardrobe button em{display:block;font-style:normal;font-weight:700;font-size:9.5px;opacity:.8}
+.swatches{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+.swatches i{width:20px;height:20px;border-radius:50%;border:2px solid #fff;cursor:pointer;pointer-events:auto;display:inline-block}
+.swatches i.on{box-shadow:0 0 0 2.5px #ff8fb8}
+.tiernav{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.mpbtn.alt{background:linear-gradient(135deg,#ffd45e,#ff9ec8);box-shadow:0 4px 0 #d08a3a;font-size:13px;padding:8px 18px}
+.mpbtn.alt:active{box-shadow:0 2px 0 #d08a3a}
 #chatwrap{position:absolute;left:18px;bottom:96px;width:min(340px,60vw)}
 #chat{max-height:170px;overflow:hidden;padding:8px 12px;font-size:12px;font-weight:700;line-height:1.7;color:#4a3a6a;word-break:break-all}
 #chRow{display:flex;gap:6px;margin-top:6px;pointer-events:auto}
-#chIn{flex:1;min-width:0;border:2px solid var(--pink2);border-radius:10px;padding:6px 10px;font:inherit;font-weight:700;font-size:13px;color:var(--ink);background:rgba(255,255,255,.9);outline:none}
+#chatIn{flex:1;min-width:0;border:2px solid var(--pink2);border-radius:10px;padding:6px 10px;font:inherit;font-weight:700;font-size:13px;color:var(--ink);background:rgba(255,255,255,.9);outline:none}
 #chToggle,#chSend{pointer-events:auto;cursor:pointer;border:none;background:var(--pink);color:#fff;font:inherit;font-weight:900;font-size:12px;border-radius:10px;padding:6px 12px}
 
 /* touch */
@@ -132,13 +204,15 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
     <h1>星屑物语</h1>
     <p class="sub">STARDUST CHRONICLE · 樱之境</p>
     <button id="startBtn">开始冒险</button>
+    <div class="tiernav"><button id="setBtn" class="mpbtn alt">舒适与画质</button><button id="bookTitleBtn" class="mpbtn alt">旅人之书</button></div>
     <div id="keys" class="panel">
       <b>W A S D</b><span>移动</span><b>鼠标 / 右键拖动</b><span>转动视角</span>
       <b>Shift</b><span>冲刺</span><b>空格</b><span>跳跃 · 二段跳 · 空中按住滑翔</span>
       <b>左键 / J</b><span>三连斩</span><b>Q</b><span>星屑爆发（能量≥60）</span>
+      <b>长按 R</b><span>星屑弹：蓄力、自动索敌、满蓄穿透</span>
       <b>E</b><span>交谈 / 互动</span><b>Tab</b><span>光标模式（可点界面 · 边缘转向）</span>
-      <b>1 2 3 4</b><span>招手 / 比心 / 点赞 / 星屑</span><b>G</b><span>呼叫同伴（地图标点）</span>
-      <b>H · M · B</b><span>帮助 · 静音 · 泛光</span>
+      <b>1 ~ 6</b><span>招手 / 比心 / 点赞 / 星屑 / 鞠躬 / 起舞　·　与同伴站在同一处做同一个动作＝合奏</span><b>G · F</b><span>呼叫同伴 · 放一场烟花</span>
+      <b>O · P · N</b><span>设置 · 档案 · 图鉴</span><b>H · M · B</b><span>帮助 · 静音 · 泛光</span>
     </div>
     <div id="mpBox">
       <div class="mprow">
@@ -151,6 +225,24 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
   </div>
 </div>
 
+<div id="book" class="ovl panel hidden">
+  <button id="bookClose" class="xclose" title="关闭">✕</button>
+  <h4>旅人之书</h4>
+  <div id="bookTabs"><button class="pill" data-tab="gear">星尘成长</button><button class="pill" data-tab="stamps">景点</button><button class="pill" data-tab="wardrobe">衣橱</button></div>
+  <div id="bookGem"></div>
+  <div id="bookBody"></div>
+  <p id="bookHint"></p>
+</div>
+
+<div id="set" class="ovl panel hidden">
+  <button id="setClose" class="xclose" title="关闭">✕</button>
+  <h4>舒适与画质</h4>
+  <p id="setLead">觉得镜头太闹就把震动与视野摆动关掉——这部作品的画面应当是让人安静下来的。</p>
+  <div id="setRows"></div>
+  <div id="setPresets"><button class="pill" data-preset="sick">容易晕</button><button class="pill" data-preset="lite">省电</button><button class="pill" data-preset="def">默认</button></div>
+  <p id="setHint">设置只存在这台设备上，随时可改。</p>
+</div>
+
 <div id="hud" class="hidden">
   <div id="stats" class="panel">
     <div class="row"><i>❤</i><div class="bar"><div id="hpfill"></div></div><span id="hpnum">100/100</span></div>
@@ -160,18 +252,30 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
   </div>
   <div id="mapwrap">
     <div id="mapbox"><canvas id="minimap" width="400" height="400"></canvas></div>
-    <div id="maptxt" class="panel"><span id="region">始源之村</span> · <span id="clock">09:00</span></div>
+    <div id="maptxt" class="panel"><span id="region">始源之村</span> · <span id="clock">09:00</span> · <span id="wx">晴</span></div>
   </div>
   <div id="quest" class="panel"><h3>✿ 当前任务</h3><div class="qt" id="qt"></div><div class="qd" id="qd"></div><div class="qp"><div id="qpf"></div></div></div>
   <div id="boss" class="panel hidden"><div>史莱姆王</div><div class="bar"><div id="bossfill"></div></div></div>
+  <div id="tide" class="panel hidden"><div id="tidetxt">史莱姆潮</div><div class="bar"><div id="tidefill"></div></div></div>
   <div id="banner"><div class="n" id="bn"></div><div class="l"></div><div class="e" id="be"></div></div>
   <div id="toasts"></div>
   <div id="prompt" class="panel hidden"><b>E</b><span id="ptxt"></span></div>
+  <div id="charge" class="hidden"><div id="chargefill"></div></div>
   <div id="dialog" class="panel hidden"><div id="dname"></div><div id="dtext"></div><div id="dnext">▼</div></div>
-  <div id="help" class="panel"><b>WASD</b> 移动　<b>Shift</b> 冲刺　<b>空格</b> 跳/滑翔　<b>左键</b> 攻击　<b>Q</b> 爆发　<b>E</b> 互动<br><b>Tab</b> 光标模式　<b>1~4</b> 表情动作　<b>G</b> 呼叫同伴　<b>点地图</b> 标点位<br><b>H</b> 隐藏帮助　<b>M</b> 静音　<b>B</b> 泛光　<b>[ ]</b> 调节时间</div>
+  <div id="help" class="panel"><b>WASD</b> 移动　<b>Shift</b> 冲刺　<b>空格</b> 跳/滑翔　<b>左键</b> 攻击　<b>Q</b> 爆发　<b>长按 R</b> 星屑弹　<b>E</b> 互动<br><b>Tab</b> 光标模式　<b>1~6</b> 表情动作（与同伴同处同做＝合奏）　<b>G</b> 呼叫同伴　<b>F</b> 放烟花　<b>V</b> 刻留言　<b>P</b> 档案　<b>N</b> 图鉴　<b>O</b> 设置　<b>点地图</b> 标点位　<b>点旅伴</b> 锁定方向<br><b>H</b> 隐藏帮助　<b>M</b> 静音　<b>B</b> 泛光　<b>[ ]</b> 调节时间</div>
   <div id="dmg"></div>
-  <div id="netbar" class="panel hidden"><span id="nstat">未连线</span><span id="nonline"></span><button class="pill" id="emBtn">动作</button><button class="pill" id="pvBtn">切磋</button><button class="pill" id="pgBtn">呼叫</button><button class="pill" id="modeBtn">光标</button><button id="leaveBtn">✕</button></div>
-  <div id="emoteRow" class="hidden"><button class="pill" data-em="wave">👋</button><button class="pill" data-em="heart">❤</button><button class="pill" data-em="up">👍</button><button class="pill" data-em="spark">✨</button></div>
+  <div id="netbar" class="panel hidden"><span id="nstat">未连线</span><span id="nonline"></span><span id="nlane"></span><button class="pill" id="emBtn">动作</button><button class="pill" id="pvBtn">切磋</button><button class="pill" id="pgBtn">呼叫</button><button class="pill" id="fwBtn">烟花</button><button class="pill" id="bdBtn">留言</button><button class="pill" id="bookBtn">旅人之书</button><button class="pill" id="setBarBtn">设置</button><button class="pill" id="acctBtn">档案</button><button class="pill" id="modeBtn">光标</button><button id="leaveBtn">✕</button></div>
+  <div id="emoteRow" class="hidden"><button class="pill" data-em="wave">👋</button><button class="pill" data-em="heart">❤</button><button class="pill" data-em="up">👍</button><button class="pill" data-em="spark">✨</button><button class="pill" data-em="bow">🙇</button><button class="pill" data-em="dance">💃</button></div>
+  <div id="pals" class="panel hidden"><h4>同行旅伴 · 红点为切磋中</h4><div id="palList"></div></div>
+  <div id="acct" class="panel hidden">
+    <button id="acctClose" title="关闭">✕</button>
+    <h4>旅人档案</h4>
+    <div id="acctLine"></div>
+    <div id="acctStats"></div>
+    <div id="acctRow"><input id="acctName" maxlength="16" placeholder="昵称" autocomplete="off"><input id="acctPass" type="password" maxlength="64" placeholder="密码（6 位以上）" autocomplete="new-password"></div>
+    <div id="acctBtns"><button class="pill" id="bindBtn">绑定</button><button class="pill" id="loginBtn">登录</button><button class="pill" id="logoutBtn">退出</button></div>
+    <p id="acctHint">绑定后换个设备也能凭昵称与密码找回这段旅程。不绑定也能玩，只是旅程留在这台设备上。</p>
+  </div>
   <div id="chatwrap">
     <div id="chat" class="panel hidden"></div>
     <div id="chRow" class="panel"><button id="chToggle">💬</button><input id="chatIn" placeholder="和旅伴说点什么…" maxlength="120" autocomplete="off"><button id="chSend">发送</button></div>
@@ -185,6 +289,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfe6ff;font-family:"N
   <div class="tb" id="tbJump" style="right:132px;bottom:38px">跳跃</div>
   <div class="tb" id="tbSpr" style="right:138px;bottom:118px;width:54px;height:54px">冲刺</div>
   <div class="tb" id="tbSp" style="right:30px;bottom:170px;width:54px;height:54px">爆发</div>
+  <div class="tb" id="tbShot" style="right:190px;bottom:64px;width:58px;height:58px">星弹</div>
   <div class="tb" id="tbE" style="right:100px;bottom:190px;width:54px;height:54px">互动</div>
   <button class="tb" id="fsBtn">全屏</button>
 </div>

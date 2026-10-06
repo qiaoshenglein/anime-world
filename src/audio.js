@@ -5,8 +5,15 @@ export class AudioSys {
   constructor() {
     this.ctx = null;
     this.muted = false;
+    this.vol = 0.7;
     this.night = 0;
     this.bar = 0;
+  }
+
+  // 音量走设置面板，静音是独立开关（两者都改 master gain）
+  setVol(v) {
+    this.vol = Math.max(0, Math.min(1, v));
+    if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : this.vol, this.ctx.currentTime, 0.05);
   }
 
   start() {
@@ -15,7 +22,7 @@ export class AudioSys {
     if (!AC) return;
     const ctx = (this.ctx = new AC());
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.7;
+    this.master.gain.value = this.muted ? 0 : this.vol;
     this.master.connect(ctx.destination);
     // reverb
     const len = ctx.sampleRate * 2.6;
@@ -59,7 +66,7 @@ export class AudioSys {
 
   setMuted(m) {
     this.muted = m;
-    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.7, this.ctx.currentTime, 0.05);
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : this.vol, this.ctx.currentTime, 0.05);
   }
 
   // ---------- music
@@ -159,6 +166,17 @@ export class AudioSys {
       case 'slime': this.sweep(200, 420, 0.12, 0.1, 'sine'); break;
       case 'step': this.noise(0.05, 4000, 2000, 0.05, 'highpass'); break;
       case 'ui': this.tone(mtof(88), t, 0.12, 'sine', 0.08, this.sfxBus); break;
+      // 新系统的反馈音：打卡/升级/烟花/许愿，都走清脆的木琴味，跟原曲同一把调
+      case 'unlock': [12, 19, 24].forEach((n, i) => this.tone(mtof(81 + n), t + i * 0.06, 1.1, 'triangle', 0.1, this.sfxBus)); break;
+      case 'level': [0, 5, 9, 12, 17].forEach((n, i) => this.tone(mtof(74 + n), t + i * 0.05, 0.7, 'sine', 0.11, this.sfxBus)); break;
+      case 'firework': this.noise(0.5, 900, 5200, 0.12, 'bandpass'); [0, 7, 12].forEach((n, i) => this.tone(mtof(90 + n), t + 0.18 + i * 0.05, 1.3, 'sine', 0.07, this.sfxBus)); break;
+      case 'wish': [0, 4, 7, 11, 14].forEach((n, i) => this.tone(mtof(84 + n), t + i * 0.11, 1.6, 'sine', 0.09, this.sfxBus)); break;
+      // 星屑弹：出手清脆，满蓄多一层泛音，命中收在高频——远弹只用一声轻响，不盖过风声
+      case 'charge': this.sweep(420, 900, 0.5, 0.05, 'triangle'); break;
+      case 'shot': this.sweep(1500, 520, 0.18, 0.13, 'triangle'); this.noise(0.12, 4200, 1400, 0.06, 'bandpass'); break;
+      case 'shotFull': this.sweep(900, 2600, 0.14, 0.1, 'sawtooth'); this.sweep(1700, 620, 0.26, 0.15, 'triangle'); [0, 7, 12].forEach((n, i) => this.tone(mtof(86 + n), t + i * 0.04, 0.5, 'sine', 0.06, this.sfxBus)); break;
+      case 'shotHit': this.tone(mtof(96), t, 0.16, 'sine', 0.085, this.sfxBus); this.noise(0.1, 5200, 1800, 0.07, 'highpass'); break;
+      case 'shotFar': this.sweep(1100, 500, 0.16, 0.045, 'sine'); break;
     }
   }
   update(night, inWater) {
